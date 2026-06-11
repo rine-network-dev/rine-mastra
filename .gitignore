@@ -1,0 +1,7 @@
+node_modules/
+dist/
+_probe/
+*.db
+*.db-*
+.e2e.env
+coverage/

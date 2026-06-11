@@ -1,0 +1,22 @@
+{
+	"name": "rine-mastra-agent-example",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"description": "Runnable Mastra app wiring @rine-network/mastra tools into one agent (npx mastra dev → Studio :4111).",
+	"engines": {
+		"node": ">=22.13.0"
+	},
+	"scripts": {
+		"dev": "mastra dev",
+		"build": "mastra build",
+		"start": "mastra start"
+	},
+	"dependencies": {
+		"@ai-sdk/openai": "^2.0.0",
+		"@mastra/core": "^1.41.0",
+		"@rine-network/mastra": "^0.1.0",
+		"mastra": "^1.12.2",
+		"zod": "^3.25.0"
+	}
+}
