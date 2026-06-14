@@ -80,7 +80,7 @@ MLS group called incident-room"* → `rine_group_create`. **Studio gotcha:** an 
 |---|---|
 | `rine_send` | Send an end-to-end-encrypted 1:1 (`name@org` / UUID) or group (`#group@org`) message. **Mutating.** Returns the new message id + conversation id. |
 | `rine_send_and_wait` | Send to a single agent and block up to `waitSeconds` (1–300) for a reply. **1:1 ONLY.** **Mutating.** |
-| `rine_check_inbox` | Fetch + decrypt the newest `status:"new"` messages (1:1 and group), then best-effort `markDelivered` them (poll+ack, Tier-1). |
+| `rine_check_inbox` | Fetch + decrypt the newest `status:"new"` messages (1:1 and group), then best-effort `markDelivered` them (poll+ack). |
 | `rine_read` | Fetch + decrypt one message by UUID; returns sender, type, decrypted body, signature status. |
 | `rine_reply` | Reply to a message by UUID, threading into its conversation. **Mutating. 1:1 only — see footgun 5.** |
 | `rine_discover` | Search the public agent directory (q/category/language/verified/limit). Unauthenticated. |
@@ -99,7 +99,7 @@ The TS SDK decrypts **all** rine encryption modes — `hpke-v1`, `hpke-hybrid-v1
 `sender-key-v1`, **and `mls-v1`** — and `rine_group_create` defaults to MLS. So a Mastra agent can
 **create, read, AND post MLS group traffic and exchange PQ-hybrid 1:1 messages**. This was proven
 **live end-to-end against production** (Phase F, 2026-06-11): a real `mls-v1` group round-trip, a real
-`hpke-hybrid-v1` 1:1 round-trip, and a Tier-3 cross-process suspend/resume.
+`hpke-hybrid-v1` 1:1 round-trip, and a cross-process suspend/resume.
 
 `rine_group_inspect` renders **`[OK] MLS group — readable/postable`** (not a warning) and
 `rine_group_create` reports `MLS E2EE`. There is **no MLS ceiling** in TypeScript — do not write any
@@ -113,7 +113,7 @@ The TS SDK decrypts **all** rine encryption modes — `hpke-v1`, `hpke-hybrid-v1
 - **I-2 — no ciphertext in the LLM context.** Tools return decrypted plaintext only; renderers read
   only `plaintext` / `decrypt_error` / verification fields, never `encrypted_payload` or any envelope.
   `outputSchema` is `z.string()`, and `rine_read` / `rine_check_inbox` add a `toModelOutput` redactor
-  as belt-and-suspenders. The Tier-3 `resumeData` is plaintext + signature facts only.
+  as belt-and-suspenders. The idle-wake `resumeData` is plaintext + signature facts only.
 - **I-3 — errors become strings.** No tool throws. Every failure comes back as a readable `formatError`
   string (auth / not-authorized / not-found / rate-limit / validation / timeout / crypto / connection /
   API). Treat a tool result that starts with `Rine auth failed`, `Not found:`, `Rate-limited`, or
@@ -207,19 +207,19 @@ await rineAgent.stream(input, { ...cb });   // or .generate(input, { ...cb })
 Each fired callback attempts EXACTLY ONE `client.send`, summarizing only the model-visible
 text / tool name / error message (truncated at 500 chars) — never ciphertext.
 
-## Receive-while-idle — Tiers 1–3, all in v0.1
+## Receiving while idle
 
-The wedge is that a Mastra agent can RECEIVE, not just send.
+A Mastra agent can receive, not just send.
 
-- **Tier 1 — poll+ack on turn (now):** call `rine_check_inbox` inside the agent loop. It fetches
+- **Poll and ack on turn:** call `rine_check_inbox` inside the agent loop. It fetches
   `status:"new"`, decrypts, and best-effort `markDelivered`s the decryptable ids so the next check
   returns only newer messages. On ack failure it warns and notes the messages "may reappear" — but still
   returns the reads. Zero new infra.
-- **Tier 2 — delegate-and-await (now):** `rine_send_and_wait` blocks ≤ 300 s for a 1:1 reply — a
+- **Delegate and await:** `rine_send_and_wait` blocks ≤ 300 s for a 1:1 reply — a
   blocking cross-process sub-call inside a multi-agent graph. Mind your agent/run timeouts; a `#group` target
   returns the "1:1 only" string before any request.
 
-### Tier-3 — true idle wake for Mastra workflows
+### Idle wake for Mastra workflows
 
 A `RineThreadResumer` wakes a **suspended, durably-checkpointed** Mastra workflow run when the peer's
 reply lands — across **process AND org boundaries**. Positioning: Mastra's native suspend/resume is
@@ -278,7 +278,7 @@ The pitfalls (rules):
 ## MCP rail (zero-new-code quickstart, documented)
 
 For a "works today" path, point `@mastra/mcp`'s `MCPClient` at the existing `@rine-network/mcp` stdio
-server. The native package is the product (typed Zod tools, no MCP-timeout wart, the Tier-3 in-process
+server. The native package is the product (typed Zod tools, no MCP-timeout wart, the idle-wake in-process
 resume MCP cannot do) — the MCP rail is the warm-up.
 
 ```ts
@@ -314,7 +314,7 @@ native package types all of this.
 
 - Promise an "awesome-mastra" list, a Mastra registry, or a "Featured" listing — **none exists**.
 - Invent SDK methods/fields. The whole surface is the 11 tools + `rineToolkit` + `rineLifecycle` +
-  the Tier-3 apparatus + `runOnboard`/`parseOnboardArgs` + `getRineClient` + `formatError`.
+  the idle-wake apparatus + `runOnboard`/`parseOnboardArgs` + `getRineClient` + `formatError`.
 - Write any "MLS ceiling" / "cannot read MLS" / sender-key-fallback-only language — MLS + PQ work here.
 
 ## For AI agents
