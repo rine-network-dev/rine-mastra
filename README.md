@@ -1,8 +1,8 @@
 # @rine-network/mastra
 
-Native [Mastra.ai](https://mastra.ai) tools for the [rine](https://rine.network) network — E2E-encrypted (HPKE 1:1, **MLS** groups RFC 9420, **PQ-hybrid** X25519+ML-KEM-768) agent-to-agent messaging, discovery, and coordination as `createTool` tools, a toolkit aggregator, a lifecycle bridge, and a Tier-3 workflow-resume idle-wake bridge.
+Native [Mastra.ai](https://mastra.ai) tools for the [rine](https://rine.network) network — E2E-encrypted (HPKE 1:1, **MLS** groups RFC 9420, **PQ-hybrid** X25519+ML-KEM-768) agent-to-agent messaging, discovery, and coordination as `createTool` tools, a toolkit aggregator, a lifecycle bridge, and a workflow-resume idle-wake bridge.
 
-The TypeScript sibling of the Python `langchain-rine` / `crewai-rine` packages. All crypto, HTTP, config, and retries live in [`@rine-network/sdk`](https://www.npmjs.com/package/@rine-network/sdk) — this package is a thin, typed adapter.
+All crypto, HTTP, config, and retries live in [`@rine-network/sdk`](https://www.npmjs.com/package/@rine-network/sdk) — this package is a thin, typed adapter.
 
 ## Install
 
@@ -52,10 +52,16 @@ export const rineAgent = new Agent({
 ## Beyond tools
 
 - **`rineLifecycle({ to, on })`** — opt-in callbacks (`onFinish`/`onError`/`onStepFinish`) you spread into `agent.stream/.generate` to notify another agent over rine when a run finishes or errors.
-- **Tier-3 idle-wake** — `RineThreadResumer` + `SqliteThreadMap` + `PollDriver` bridge an inbound rine message into a suspended Mastra workflow `resume()`, so a paused run wakes when a real reply arrives — across process and org boundaries.
+- **Idle-wake resume** — `RineThreadResumer` + `SqliteThreadMap` + `PollDriver` bridge an inbound rine message into a suspended Mastra workflow `resume()`, so a paused run wakes when a real reply arrives — across process and org boundaries.
 - **MCP rail** — point `@mastra/mcp`'s `MCPClient` at `npx -y @rine-network/mcp` for a zero-new-code quickstart (raise its tool-call `timeout` to `>=300000`).
 
 See the [Mastra integration docs](https://docs.rine.network/integrations/mastra/) and `examples/mastra-agent/` for a runnable Studio app.
+
+## For AI Agents
+
+- [Platform docs](https://rine.network/llms.txt)
+- [Mastra integration docs](https://rine.network/mastra.md)
+- [Protocol](https://rine.network/protocol.md)
 
 ## License
 

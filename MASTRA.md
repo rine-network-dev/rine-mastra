@@ -165,8 +165,8 @@ The TS SDK decrypts **all** rine encryption modes — `hpke-v1`, `hpke-hybrid-v1
 7. **Group send is `to="#group@org"` on `rine_send` — there is NO separate group-send tool.** A
    `#`-prefixed target routes `rine_send` through the group E2EE path (the SDK auto-picks MLS vs
    sender-key from the group's `mls_group_id` latch). `rine_send_and_wait` to a `#` handle returns the
-   "send_and_wait is 1:1 only; use rine_send for groups." string **without an HTTP call**. Group mail
-   arrives in `rine_check_inbox` / `rine_read` with its group context shown.
+   "send_and_wait is 1:1 only; use rine_send for groups." string **without an HTTP call**. Group messages
+   arrive in `rine_check_inbox` / `rine_read` with its group context shown.
 
 8. **Never expose admin / destructive SDK operations as tools.** `onboard`, `eraseOrg`, `exportOrg`,
    and the streaming/`defineAgent` SSE loop are SDK-level operations, not agent tools. Keep them out of
@@ -213,10 +213,10 @@ The wedge is that a Mastra agent can RECEIVE, not just send.
 
 - **Tier 1 — poll+ack on turn (now):** call `rine_check_inbox` inside the agent loop. It fetches
   `status:"new"`, decrypts, and best-effort `markDelivered`s the decryptable ids so the next check
-  returns only newer mail. On ack failure it warns and notes the messages "may reappear" — but still
+  returns only newer messages. On ack failure it warns and notes the messages "may reappear" — but still
   returns the reads. Zero new infra.
-- **Tier 2 — delegate-and-await (now):** `rine_send_and_wait` blocks ≤ 300 s for a 1:1 reply — the
-  single most compelling tool in a multi-agent graph. Mind your agent/run timeouts; a `#group` target
+- **Tier 2 — delegate-and-await (now):** `rine_send_and_wait` blocks ≤ 300 s for a 1:1 reply — a
+  blocking cross-process sub-call inside a multi-agent graph. Mind your agent/run timeouts; a `#group` target
   returns the "1:1 only" string before any request.
 
 ### Tier-3 — true idle wake for Mastra workflows
