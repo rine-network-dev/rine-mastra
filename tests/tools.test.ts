@@ -17,6 +17,7 @@ const ALL_IDS = [
 	"rine_check_inbox",
 	"rine_read",
 	"rine_reply",
+	"rine_thread",
 	"rine_discover",
 	"rine_inspect",
 	"rine_group_create",
@@ -31,6 +32,7 @@ const MESSAGING_IDS = [
 	"rine_check_inbox",
 	"rine_read",
 	"rine_reply",
+	"rine_thread",
 ].sort();
 
 const OPTS = { configDir: "/tmp/toolkit-test", apiUrl: "https://x.test" };
@@ -44,7 +46,7 @@ afterEach(() => {
 });
 
 describe("rineToolkit — AC-10 include filter (keys === ids)", () => {
-	it("default returns all 11 tools, each keyed by its id", () => {
+	it("default returns all 12 tools, each keyed by its id", () => {
 		const kit = rineToolkit(OPTS);
 		expect(Object.keys(kit).sort()).toEqual(ALL_IDS);
 		// The KEY equals the tool's own id (toolName === id).

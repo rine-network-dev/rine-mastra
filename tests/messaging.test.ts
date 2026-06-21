@@ -15,6 +15,7 @@ import {
 	createRineReplyTool,
 	createRineSendAndWaitTool,
 	createRineSendTool,
+	createRineThreadTool,
 } from "../src/messaging.js";
 import {
 	API_URL,
@@ -402,19 +403,24 @@ describe("rine_read / rine_reply (AC-1, AC-3, AC-9)", () => {
 		expect(out).not.toContain(env.encrypted_payload);
 	});
 
-	it("reply posts to /messages/{id}/reply and returns the reply id", async () => {
-		h.route("POST", new RegExp(`^/messages/${MSG_UUID}/reply$`), () => ({
-			json: {
-				id: REPLY_UUID,
-				conversation_id: CONV_UUID,
-				from_agent_id: SELF_AGENT_ID,
-				to_agent_id: PEER_AGENT_ID,
-				type: "rine.v1.task_response",
-				encrypted_payload: "OPAQUE",
-				encryption_version: "hpke-v1",
-				created_at: "2026-06-11T00:00:00.000Z",
-			},
-		}));
+	it("REQ-FORK-01: reply-in-place keeps the inbound conversation (reply endpoint), default type task_response", async () => {
+		let replyBody: Record<string, unknown> | undefined;
+		h.route("POST", new RegExp(`^/messages/${MSG_UUID}/reply$`), (req) => {
+			replyBody = req.body as Record<string, unknown>;
+			return {
+				json: {
+					id: REPLY_UUID,
+					// Server preserves the inbound conversation on the reply endpoint.
+					conversation_id: CONV_UUID,
+					from_agent_id: SELF_AGENT_ID,
+					to_agent_id: PEER_AGENT_ID,
+					type: "rine.v1.task_response",
+					encrypted_payload: "OPAQUE",
+					encryption_version: "hpke-v1",
+					created_at: "2026-06-11T00:00:00.000Z",
+				},
+			};
+		});
 		// reply resolves the recipient (original sender) via GET /messages/{id}.
 		const env = await h.selfEncrypt({ text: "original" });
 		h.route("GET", new RegExp(`^/messages/${MSG_UUID}$`), () => ({
@@ -437,16 +443,64 @@ describe("rine_read / rine_reply (AC-1, AC-3, AC-9)", () => {
 			configDir: h.configDir,
 			apiUrl: API_URL,
 		});
-		const out = await runTool(
-			tool,
-			{
-				messageId: MSG_UUID,
-				body: "got it",
-				messageType: "rine.v1.task_response",
-			},
-			h,
-		);
+		// No messageType supplied → schema default applies (type-preserving).
+		const out = await runTool(tool, { messageId: MSG_UUID, body: "got it" }, h);
 		expect(out).toBe(`Replied to ${MSG_UUID} -> ${REPLY_UUID}.`);
+		// Behavioral: it hit the in-place reply endpoint for the inbound id, NOT
+		// a forking POST /messages.
+		const replyPost = h.requests.find(
+			(r) => r.method === "POST" && r.path === `/messages/${MSG_UUID}/reply`,
+		);
+		expect(replyPost).toBeDefined();
+		expect(
+			h.requests.filter((r) => r.method === "POST" && r.path === "/messages"),
+		).toHaveLength(0);
+		// Type is the reply default (task_response) — NOT forced to task_request,
+		// so a peer Eve's loop guard still treats it as terminal (REQ-FORK-01).
+		expect(replyBody?.type).toBe("rine.v1.task_response");
+	});
+
+	it("REQ-FORK-01: tool descriptions steer follow-ups to rine_reply (same thread) over rine_send (new conversation)", () => {
+		const reply = createRineReplyTool();
+		const send = createRineSendTool();
+		expect(reply.description?.toLowerCase()).toContain("same conversation");
+		expect(send.description?.toLowerCase()).toContain("new conversation");
+	});
+
+	it("REQ-TOOL-01: rine_thread renders the both-sided transcript role-tagged (pull-only)", async () => {
+		// A received turn from the peer, sealed to us (real crypto via the harness).
+		const recv = await h.selfEncrypt({ text: "peer turn one" });
+		h.route("GET", new RegExp(`^/conversations/${CONV_UUID}/messages$`), () => ({
+			json: {
+				messages: [
+					{
+						id: MSG_UUID,
+						conversation_id: CONV_UUID,
+						direction: "received",
+						sender_handle: PEER_HANDLE,
+						from_agent_id: PEER_AGENT_ID,
+						to_agent_id: SELF_AGENT_ID,
+						type: "rine.v1.task_request",
+						encrypted_payload: recv.encrypted_payload,
+						encryption_version: recv.encryption_version,
+						sender_signing_kid: recv.sender_signing_kid,
+						content_type: "application/json",
+						created_at: "2026-06-11T00:00:00.000Z",
+					},
+				],
+				truncated: false,
+			},
+		}));
+
+		const tool = createRineThreadTool({
+			configDir: h.configDir,
+			apiUrl: API_URL,
+		});
+		const out = await runTool(tool, { conversationId: CONV_UUID }, h);
+
+		expect(out).toContain(`[received] ${PEER_HANDLE}: peer turn one`);
+		// I-2: ciphertext never surfaces in the rendered transcript.
+		expect(out).not.toContain(recv.encrypted_payload);
 	});
 
 	it("AC-9: read of an UNREADABLE envelope renders [unreadable], never ciphertext", async () => {

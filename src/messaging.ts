@@ -18,6 +18,7 @@ import {
 	renderInbox,
 	renderMessageBody,
 	renderSingleMessage,
+	renderThread,
 	verifiedNote,
 } from "./format.js";
 import {
@@ -26,6 +27,7 @@ import {
 	replyInput,
 	sendAndWaitInput,
 	sendInput,
+	threadInput,
 } from "./schemas.js";
 import {
 	type RineToolOpts,
@@ -39,7 +41,7 @@ export function createRineSendTool(opts: RineToolOpts = {}) {
 	return createTool({
 		id: "rine_send",
 		description:
-			"Send an end-to-end-encrypted message to another agent (`name@org` / UUID) or, with a `#`-prefixed handle, to a whole group over its E2EE channel. This is a real, irreversible network action: the message is delivered to a live recipient. Returns the new message id and conversation id.",
+			"Start a NEW conversation: send an end-to-end-encrypted message to another agent (`name@org` / UUID) or, with a `#`-prefixed handle, to a whole group over its E2EE channel. Use this to open a fresh thread, NOT to answer an inbound message — to continue an existing conversation use rine_reply (which keeps the same thread). This is a real, irreversible network action: the message is delivered to a live recipient. Returns the new message id and conversation id.",
 		inputSchema: sendInput,
 		outputSchema: strResult,
 		mcp: { annotations: { destructiveHint: true } },
@@ -144,12 +146,29 @@ export function createRineReadTool(opts: RineToolOpts = {}) {
 	});
 }
 
+/** `rine_thread` — fetch the both-sided, decrypted transcript of a conversation. */
+export function createRineThreadTool(opts: RineToolOpts = {}) {
+	return createTool({
+		id: "rine_thread",
+		description:
+			"Fetch the both-sided, decrypted transcript of a conversation by its UUID. Returns every turn (yours and the peer's) ordered oldest→newest, each role-tagged (`[sent] you:` / `[received] handle:`). A turn you cannot decrypt renders `[unavailable]`. Use to recover the full context of a conversation on demand.",
+		inputSchema: threadInput,
+		outputSchema: strResult,
+		// I-2 layer (c): belt-and-suspenders ciphertext redactor (SPEC §2.2).
+		toModelOutput: redactToText,
+		execute: makeExecute<z.infer<typeof threadInput>>(opts, async (client, i) => {
+			const entries = await client.thread(i.conversationId, { limit: i.limit });
+			return renderThread(entries);
+		}),
+	});
+}
+
 /** `rine_reply` — reply to a message, threading into the same conversation. */
 export function createRineReplyTool(opts: RineToolOpts = {}) {
 	return createTool({
 		id: "rine_reply",
 		description:
-			"Send an end-to-end-encrypted reply to a message (by its UUID), threading into the same conversation. This is a real, irreversible network action. Returns the reply's message id.",
+			"Continue the SAME conversation (reply-in-place): send an end-to-end-encrypted reply to a message by its UUID, keeping it in that message's existing thread (no new conversation is forked). This is the right tool to answer an inbound message. This is a real, irreversible network action. Returns the reply's message id.",
 		inputSchema: replyInput,
 		outputSchema: strResult,
 		mcp: { annotations: { destructiveHint: true } },

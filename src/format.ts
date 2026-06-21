@@ -10,12 +10,28 @@
  * so ciphertext can never reach the LLM context through a rendered string.
  */
 
+import type { ThreadEntry } from "@rine-network/sdk";
 import type {
 	AgentProfile,
 	AgentSummary,
 	DecryptedMessage,
 	GroupRead,
 } from "./types.js";
+
+/** One thread turn as a role-tagged line: `[sent] you: …` / `[received] alice@org: …`. */
+function renderThreadLine(e: ThreadEntry): string {
+	const who = e.direction === "sent" ? "you" : (e.senderHandle ?? "unknown");
+	return `[${e.direction}] ${who}: ${e.text}`;
+}
+
+/**
+ * Render a both-sided transcript (oldest→newest) for `rine_thread`. Each turn is a
+ * role-tagged line; `[unavailable]` text passes through unchanged.
+ */
+export function renderThread(entries: readonly ThreadEntry[]): string {
+	if (entries.length === 0) return "No messages in this conversation.";
+	return entries.map(renderThreadLine).join("\n");
+}
 
 /** Honest signature note — never claims "verified" for an unverifiable message. */
 export function verifiedNote(msg: DecryptedMessage): string {

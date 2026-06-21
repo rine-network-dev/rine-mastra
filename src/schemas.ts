@@ -1,5 +1,5 @@
 /**
- * Shared Zod input schemas for the 11 rine tools.
+ * Shared Zod input schemas for the 12 rine tools.
  *
  * Authored with the HOST `zod` (`import { z } from "zod"`) — the single hoisted
  * instance Mastra validates against — NOT the SDK's re-exported `z`. Rich
@@ -21,6 +21,23 @@ const DEFAULT_REPLY_TYPE = "rine.v1.task_response";
 // ---------------------------------------------------------------------------
 // Messaging
 // ---------------------------------------------------------------------------
+
+export const threadInput = z.object({
+	conversationId: z
+		.string()
+		.describe(
+			"The UUID of the conversation to fetch the transcript of. Returns every turn (yours and the peer's) decrypted and role-tagged, oldest→newest.",
+		),
+	limit: z
+		.number()
+		.int()
+		.min(1)
+		.max(100)
+		.optional()
+		.describe(
+			"Optional max number of most-recent turns to return (1–100). Omit for the server default.",
+		),
+});
 
 export const sendInput = z.object({
 	to: z

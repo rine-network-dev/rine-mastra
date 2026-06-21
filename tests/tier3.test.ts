@@ -296,6 +296,35 @@ describe("RineThreadResumer.handleInbound — skip paths never ack (lossless)", 
 		expect(resumeData).toMatchObject({ from: agentUuid });
 	});
 
+	it("REQ-CTX-02: resumeData injects NO rine transcript (no double-context)", async () => {
+		// mastra relies on the durable host session store + the pull tool, NOT a
+		// pushed transcript. The resumed step gets ONLY plaintext + signature facts.
+		const f = fakeWorkflow("suspended");
+		const map = new InMemoryThreadMap();
+		await map.set("bob@acme", "c1", "run-x");
+		const resumer = new RineThreadResumer({
+			workflow: f.workflow,
+			threadMap: map,
+			logger: quietLogger,
+		});
+		const out = await resumer.handleInbound(inbound());
+		expect(out).toEqual({ resumed: true, runId: "run-x" });
+		const resumeData = f.resume.mock.calls[0]?.[0]?.resumeData as Record<
+			string,
+			unknown
+		>;
+		// Exactly the four documented keys — no `transcript`/`context`/`thread`.
+		expect(Object.keys(resumeData).sort()).toEqual([
+			"from",
+			"messageId",
+			"plaintext",
+			"verified",
+		]);
+		expect(resumeData).not.toHaveProperty("transcript");
+		expect(resumeData).not.toHaveProperty("context");
+		expect(resumeData).not.toHaveProperty("thread");
+	});
+
 	it("resume that throws → failed skip, lossless (no ack, no crash)", async () => {
 		// A transient storage error or a throwing resumed step must NOT propagate
 		// (I-3) — it degrades to a lossless skip so the message stays in the inbox.

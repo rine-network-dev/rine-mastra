@@ -5,7 +5,7 @@
  * (`toolName === id`). Drop the record straight into a Mastra `Agent`'s
  * `tools: {}` map.
  *
- * `include` curates the surface: `"all"` (11), one domain
+ * `include` curates the surface: `"all"` (12), one domain
  * (`"messaging"`/`"discovery"`/`"groups"`), or an array union of domains.
  *
  * AC-11 shared client: ONE lazily-built `AsyncRineClient` is created per
@@ -32,6 +32,7 @@ import {
 	createRineReplyTool,
 	createRineSendAndWaitTool,
 	createRineSendTool,
+	createRineThreadTool,
 } from "./messaging.js";
 import type { RineToolOpts } from "./tool.js";
 
@@ -49,6 +50,7 @@ const DOMAINS: Record<
 		createRineCheckInboxTool,
 		createRineReadTool,
 		createRineReplyTool,
+		createRineThreadTool,
 	],
 	discovery: [createRineDiscoverTool, createRineInspectTool],
 	groups: [

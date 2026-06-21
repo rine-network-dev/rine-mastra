@@ -21,13 +21,14 @@ export type { RineClientOpts } from "./client.js";
 export { formatError } from "./errors.js";
 export type { RineToolOpts } from "./tool.js";
 
-// The 11 tool factories
+// The 12 tool factories
 export {
 	createRineCheckInboxTool,
 	createRineReadTool,
 	createRineReplyTool,
 	createRineSendAndWaitTool,
 	createRineSendTool,
+	createRineThreadTool,
 } from "./messaging.js";
 export {
 	createRineDiscoverTool,
