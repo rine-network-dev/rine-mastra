@@ -17,6 +17,7 @@
  */
 
 import { resolveApiUrl } from "@rine-network/core";
+import type { FacilitatorConfig } from "@rine-network/core";
 import type {
 	AgentHandle,
 	AgentUuid,
@@ -43,6 +44,31 @@ import { formatError } from "./errors.js";
 export interface RineToolOpts extends RineClientOpts {
 	/** A shared client to reuse (set by `rineToolkit` for AC-11). */
 	client?: AsyncRineClient;
+}
+
+/**
+ * Extra options the two x402 payment tools (`rine_pay`, `rine_fulfill`) accept
+ * on top of {@link RineToolOpts}, threaded from `rineToolkit({ payments })`.
+ * None carry key material: the wallet key and spend policy stay on disk, and a
+ * facilitator config carries only a URL (+ optional provider-auth headers the
+ * HOST supplies, never the model).
+ */
+export interface RinePaymentToolOpts extends RineToolOpts {
+	/**
+	 * D2 auto-pay default (default OFF). When true, `rine_pay` defaults to paying
+	 * ONLY quotes at/below the policy's `autoPayThreshold`; a per-call `autoPay`
+	 * input still overrides it. Caps + deny-by-default + reserve-lock bound it
+	 * regardless.
+	 */
+	autoPay?: boolean;
+	/**
+	 * The facilitator `rine_fulfill` verifies/settles through — a `FacilitatorConfig`
+	 * (URL + optional auth headers) or a preset key / base-URL string. A per-call
+	 * `facilitator` input overrides it.
+	 */
+	facilitator?: FacilitatorConfig | string;
+	/** Default for the payment/receipt cleartext marker (default ON). */
+	emitMarker?: boolean;
 }
 
 /**

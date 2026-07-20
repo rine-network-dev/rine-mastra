@@ -5,8 +5,10 @@
  * (`toolName === id`). Drop the record straight into a Mastra `Agent`'s
  * `tools: {}` map.
  *
- * `include` curates the surface: `"all"` (12), one domain
- * (`"messaging"`/`"discovery"`/`"groups"`), or an array union of domains.
+ * `include` curates the surface: `"all"` (14), one domain
+ * (`"messaging"`/`"discovery"`/`"groups"`/`"payments"`), or an array union of
+ * domains. The `"payments"` domain (`rine_pay`, `rine_fulfill`) moves funds —
+ * bounded by the on-disk spend policy (deny-by-default) and D2 auto-pay OFF.
  *
  * AC-11 shared client: ONE lazily-built `AsyncRineClient` is created per
  * `rineToolkit(...)` call and threaded into every tool's `opts.client`, so all
@@ -34,15 +36,16 @@ import {
 	createRineSendTool,
 	createRineThreadTool,
 } from "./messaging.js";
-import type { RineToolOpts } from "./tool.js";
+import { createRineFulfillTool, createRinePayTool } from "./payments.js";
+import type { RinePaymentToolOpts } from "./tool.js";
 
 /** The domains a toolkit can be filtered to. */
-export type RineToolDomain = "messaging" | "discovery" | "groups";
+export type RineToolDomain = "messaging" | "discovery" | "groups" | "payments";
 
 /** The tool factories grouped by domain (drives the `include` filter). */
 const DOMAINS: Record<
 	RineToolDomain,
-	readonly ((opts: RineToolOpts) => Tool)[]
+	readonly ((opts: RinePaymentToolOpts) => Tool)[]
 > = {
 	messaging: [
 		createRineSendTool,
@@ -59,13 +62,29 @@ const DOMAINS: Record<
 		createRineGroupRemoveTool,
 		createRineGroupInspectTool,
 	],
+	payments: [createRinePayTool, createRineFulfillTool],
 };
 
 const ALL_DOMAINS: readonly RineToolDomain[] = [
 	"messaging",
 	"discovery",
 	"groups",
+	"payments",
 ];
+
+/**
+ * Payment configuration for the `"payments"` domain tools (`rine_pay`,
+ * `rine_fulfill`). All optional; the tools work with sensible defaults (auto-pay
+ * OFF, marker ON) and a facilitator is only needed to `rine_fulfill`.
+ */
+export interface RinePaymentsConfig {
+	/** D2 auto-pay default (default OFF). See {@link RinePaymentToolOpts.autoPay}. */
+	autoPay?: RinePaymentToolOpts["autoPay"];
+	/** Facilitator for `rine_fulfill`. See {@link RinePaymentToolOpts.facilitator}. */
+	facilitator?: RinePaymentToolOpts["facilitator"];
+	/** Default for the cleartext marker (default ON). */
+	emitMarker?: RinePaymentToolOpts["emitMarker"];
+}
 
 /** Options for {@link rineToolkit}. */
 export interface RineToolkitOptions {
@@ -77,6 +96,8 @@ export interface RineToolkitOptions {
 	agent?: string;
 	/** Which tools to include. Default `"all"`. */
 	include?: "all" | RineToolDomain | readonly RineToolDomain[];
+	/** Config for the `"payments"` domain tools (auto-pay OFF by default). */
+	payments?: RinePaymentsConfig;
 }
 
 /** Resolve the `include` option to the ordered set of domains to build. */
@@ -104,11 +125,14 @@ export function rineToolkit(
 		apiUrl: opts.apiUrl,
 		agent: opts.agent,
 	});
-	const toolOpts: RineToolOpts = {
+	const toolOpts: RinePaymentToolOpts = {
 		configDir: opts.configDir,
 		apiUrl: opts.apiUrl,
 		agent: opts.agent,
 		client: sharedClient,
+		autoPay: opts.payments?.autoPay,
+		facilitator: opts.payments?.facilitator,
+		emitMarker: opts.payments?.emitMarker,
 	};
 
 	const out: Record<string, Tool> = {};

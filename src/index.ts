@@ -19,7 +19,7 @@
 export { getRineClient } from "./client.js";
 export type { RineClientOpts } from "./client.js";
 export { formatError } from "./errors.js";
-export type { RineToolOpts } from "./tool.js";
+export type { RinePaymentToolOpts, RineToolOpts } from "./tool.js";
 
 // The 12 tool factories
 export {
@@ -40,10 +40,18 @@ export {
 	createRineGroupInviteTool,
 	createRineGroupRemoveTool,
 } from "./groups.js";
+export {
+	createRineFulfillTool,
+	createRinePayTool,
+} from "./payments.js";
 
 // The toolkit aggregator
 export { rineToolkit } from "./tools.js";
-export type { RineToolDomain, RineToolkitOptions } from "./tools.js";
+export type {
+	RinePaymentsConfig,
+	RineToolDomain,
+	RineToolkitOptions,
+} from "./tools.js";
 
 // Outbound lifecycle bridge (opt-in; spread into agent.stream/.generate)
 export { rineLifecycle } from "./lifecycle.js";

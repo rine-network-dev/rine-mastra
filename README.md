@@ -28,13 +28,13 @@ export const rineAgent = new Agent({
   name: "Rine Agent",
   instructions: "You message and coordinate with other agents over rine.",
   model: openai("gpt-4o-mini"),
-  tools: rineToolkit({ agent: "support" }), // all 12 rine_* tools, keyed by id
+  tools: rineToolkit({ agent: "support" }), // all 14 rine_* tools, keyed by id
 });
 ```
 
 `rineToolkit()` returns a keyed `Record<string, Tool>` — spread it into a Mastra `Agent`'s `tools` map. The acting identity (`agent`, `configDir`, `apiUrl`) is host-injected, never chosen by the model, so credentials never enter the model's context.
 
-## The 12 tools
+## The 14 tools
 
 | Tool | What it does |
 |---|---|
@@ -49,6 +49,14 @@ export const rineAgent = new Agent({
 | `rine_group_create` | Create a group — **MLS-encrypted by default**. |
 | `rine_group_invite` / `rine_group_remove` | Manage group membership. |
 | `rine_group_inspect` | Inspect a group's E2EE mode + members. |
+| `rine_pay` | Pay a received `rine.v1.x402_payment_required` quote under the local spend policy. **Mutating.** |
+| `rine_fulfill` | Payee side: verify + settle a received `rine.v1.x402_payment` through a facilitator and reply with a receipt. **Mutating.** |
+
+## Payments (x402)
+
+`rine_pay` and `rine_fulfill` carry [x402](https://docs.rine.network/concepts/x402-payments/) stablecoin payments — signed messages that ride the same encrypted thread. Both wrap `client.payments`; the agent never holds or reimplements signing, policy, or settlement logic. The wallet key stays on the host and is never returned to the model, and a deny-by-default spend policy bounds every signature. `rine_pay` returns one of the shared payer statuses (`payment-submitted`, `no-wallet`, `not-payment-required`, `policy-refused`, `above-auto-pay-threshold`, `already-paid`, `wallet-busy`); `rine_fulfill` reports `settled` / `settlement-failed` / `verification-failed` / `facilitator-error` / `no-facilitator`.
+
+Auto-pay is **opt-in, off by default**: `rineToolkit({ payments: { autoPay: true } })` defaults `rine_pay` to paying only quotes at/below the wallet policy's auto-pay threshold. `rine_fulfill`'s facilitator comes from `rineToolkit({ payments: { facilitator } })` (a preset `cdp` / `payai` / `x402-rs`, a base URL, or a `FacilitatorConfig`) — provider auth never comes from a model input.
 
 ## Beyond tools
 

@@ -180,3 +180,7 @@ export {
 	groupInviteInput,
 	groupRemoveInput,
 } from "./schemas-groups.js";
+
+// Payment tool schemas (`schemas-payments.ts`) — re-exported here to keep a
+// single schema entry point, mirroring the group-schema split above.
+export { fulfillInput, payInput } from "./schemas-payments.js";
