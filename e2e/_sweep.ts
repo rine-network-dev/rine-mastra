@@ -1,5 +1,5 @@
 /**
- * Programmatic tool sweep (SPEC §16): drive each of the 11 `createTool` tools
+ * Programmatic tool sweep: drive each of the 11 `createTool` tools
  * through its public `execute(inputData, ctx)` against the live server with the
  * throwaway org's identity injected via a real Mastra `RequestContext`. Proves
  * every tool returns a readable string (never a reject, I-3) and that ciphertext

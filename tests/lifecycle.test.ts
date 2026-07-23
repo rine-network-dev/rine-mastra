@@ -1,5 +1,5 @@
 /**
- * The outbound lifecycle bridge `rineLifecycle` (SPEC §8), driven through the
+ * The outbound lifecycle bridge `rineLifecycle`, driven through the
  * callbacks a host app spreads into `agent.stream/.generate` against the real SDK
  * + real crypto + a mock HTTP boundary.
  *

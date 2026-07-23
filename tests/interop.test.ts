@@ -4,7 +4,7 @@
  * driven by a scripted `MockLanguageModelV3`. Asserts the model can call the rine
  * tool and its `execute` fires end-to-end (real SDK + crypto + mock boundary),
  * returning a real rendered string — proving the rine tools are valid AI-SDK
- * tools, not a bespoke shape. Mirrors the Phase-0 p03 probe.
+ * tools, not a bespoke shape.
  */
 
 import { Agent } from "@mastra/core/agent";

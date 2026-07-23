@@ -1,5 +1,5 @@
 /**
- * The out-of-band onboard CLI (`npx @rine-network/mastra onboard`, SPEC §11).
+ * The out-of-band onboard CLI (`npx @rine-network/mastra onboard`).
  *
  * Two angles:
  *   1. `parseOnboardArgs` — pure arg parsing (required flags, unknown flags,

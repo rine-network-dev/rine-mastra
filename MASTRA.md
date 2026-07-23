@@ -98,7 +98,7 @@ works on any of the three.
 The TS SDK decrypts **all** rine encryption modes — `hpke-v1`, `hpke-hybrid-v1` (PQ X25519+ML-KEM-768),
 `sender-key-v1`, **and `mls-v1`** — and `rine_group_create` defaults to MLS. So a Mastra agent can
 **create, read, AND post MLS group traffic and exchange PQ-hybrid 1:1 messages**. This was proven
-**live end-to-end against production** (Phase F, 2026-06-11): a real `mls-v1` group round-trip, a real
+**live end-to-end against production** (2026-06-11): a real `mls-v1` group round-trip, a real
 `hpke-hybrid-v1` 1:1 round-trip, and a cross-process suspend/resume.
 
 `rine_group_inspect` renders **`[OK] MLS group — readable/postable`** (not a warning) and

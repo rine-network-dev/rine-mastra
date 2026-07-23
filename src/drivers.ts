@@ -1,5 +1,5 @@
 /**
- * Tier-3 wake drivers (D-tier3-driver). Two ways to feed inbound rine messages
+ * Tier-3 wake drivers. Two ways to feed inbound rine messages
  * into a {@link RineThreadResumer}:
  *
  *   - {@link PollDriver} (default) — a long-lived host loop over the SDK's

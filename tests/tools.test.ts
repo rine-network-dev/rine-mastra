@@ -24,6 +24,8 @@ const ALL_IDS = [
 	"rine_group_invite",
 	"rine_group_remove",
 	"rine_group_inspect",
+	"rine_group_join",
+	"rine_group_invites",
 	"rine_pay",
 	"rine_fulfill",
 ].sort();
@@ -48,7 +50,7 @@ afterEach(() => {
 });
 
 describe("rineToolkit — AC-10 include filter (keys === ids)", () => {
-	it("default returns all 14 tools, each keyed by its id", () => {
+	it("default returns all 16 tools, each keyed by its id", () => {
 		const kit = rineToolkit(OPTS);
 		expect(Object.keys(kit).sort()).toEqual(ALL_IDS);
 		// The KEY equals the tool's own id (toolName === id).
@@ -86,6 +88,8 @@ describe("rineToolkit — AC-10 include filter (keys === ids)", () => {
 				"rine_group_invite",
 				"rine_group_remove",
 				"rine_group_inspect",
+				"rine_group_join",
+				"rine_group_invites",
 			].sort(),
 		);
 		// Messaging is excluded.

@@ -1,10 +1,10 @@
 /**
- * Outbound lifecycle bridge `rineLifecycle` (SPEC §8 + PHASE0_CONTRACT P0-7).
+ * Outbound lifecycle bridge `rineLifecycle`.
  *
  * Mastra has NO callback-handler object class. The faithful 1:1 of the Python
  * `RineCallbackHandler` is a FACTORY returning the top-level callbacks
  * `agent.stream(...)` / `agent.generate(...)` accept — verified identical across
- * both methods (P0-7). Spread the result into either:
+ * both methods. Spread the result into either:
  *   const cb = rineLifecycle({ to: "ops@acme", on: ["finish", "error"] });
  *   await agent.stream(input, { ...cb });    // or .generate(input, { ...cb })
  *

@@ -64,7 +64,7 @@ describe("rine_discover (AC-1, AC-2)", () => {
 		expect(queryUrl).toContain("q=helper");
 		expect(queryUrl).toContain("category=research");
 		expect(queryUrl).toContain("verified=true");
-		// Dropped Python fields never appear (D-discover-fields).
+		// Dropped Python fields never appear.
 		expect(queryUrl).not.toContain("tag=");
 		expect(queryUrl).not.toContain("jurisdiction=");
 		expect(queryUrl).not.toContain("pricing");

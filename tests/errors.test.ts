@@ -1,5 +1,5 @@
 /**
- * Error → string mapping (I-3 / SPEC §13). Each SDK error class maps to its
+ * Error → string mapping (I-3). Each SDK error class maps to its
  * documented readable string; `formatError` always RESOLVES a string (it never
  * throws), so a tool's `execute` can return it directly without ever rejecting.
  * Ordering matters — the subclasses all extend `RineApiError`, so the table must
@@ -29,7 +29,7 @@ import {
 	isGroupUnsupportedOnWait,
 } from "../src/errors.js";
 
-describe("formatError — §13 error table", () => {
+describe("formatError — error table", () => {
 	it("AuthenticationError → onboard guidance", () => {
 		const out = formatError(new AuthenticationError("nope"));
 		expect(out).toContain("Rine auth failed");

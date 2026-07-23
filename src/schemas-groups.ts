@@ -1,11 +1,11 @@
 /**
  * Zod input schemas for the 4 group tools (split out of `schemas.ts` to hold the
- * ~200-LOC budget — the schema concentration the SPEC §4 endorses, one file per
+ * ~200-LOC budget — one file per
  * domain). Same authoring rules: HOST `zod`, rich `.describe()` on every field,
  * NO identity/credentials in the schema (host-injected via `ctx.requestContext`).
  *
  * Groups are MLS-capable by default — `enableMls` (default true) on create is the
- * headline inversion vs the Python siblings (D-mls).
+ * headline inversion vs the Python siblings.
  */
 
 import { z } from "zod";
@@ -70,3 +70,18 @@ export const groupInspectInput = z.object({
 			"The group to inspect: a handle (`#name@org`) or a UUID. Reports its E2EE mode and policy.",
 		),
 });
+
+export const groupJoinInput = z.object({
+	group: z
+		.string()
+		.describe(
+			"The group to join: a handle (`#name@org`) or a UUID. Resolved to a UUID before joining.",
+		),
+	message: z
+		.string()
+		.optional()
+		.describe("Optional message included with the join request."),
+});
+
+/** `rine_group_invites` takes no input — it lists the caller's own pending invites. */
+export const groupInvitesInput = z.object({});

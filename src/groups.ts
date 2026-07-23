@@ -1,18 +1,22 @@
 /**
- * The 4 group tools: `rine_group_create`, `rine_group_invite`,
- * `rine_group_remove`, `rine_group_inspect` (SPEC §6 groups table — the
- * INVERTED, MLS-capable section).
+ * The 6 group tools: `rine_group_create`, `rine_group_invite`,
+ * `rine_group_remove`, `rine_group_inspect` (the INVERTED, MLS-capable
+ * section), `rine_group_join`, `rine_group_invites`.
  *
- * `group_create` exposes `enableMls` (default true) — the headline differentiator
- * (D-mls): the SDK best-effort-inits an MLS group and the renderer reports
+ * `group_create` exposes `enableMls` (default true) — the headline differentiator:
+ * the SDK best-effort-inits an MLS group and the renderer reports
  * `[OK] MLS`, not a `[WARN]` ceiling.
  *
  * The TS SDK's `groups.invite`/`removeMember`/`get` take BRANDED UUIDs
  * positionally (unlike the Python SDK, which resolved handles internally), so
- * invite/remove/inspect PRE-RESOLVE handle→UUID here (D-handle-resolve):
+ * invite/remove/inspect/join PRE-RESOLVE handle→UUID here:
  *   - a group → `groups.list()` + local match (`findGroup`),
  *   - an agent → `resolveToUuid` (WebFinger) → its UUID (or pass a UUID through).
  *     WebFinger — not the public directory — so unlisted agents resolve too.
+ *
+ * `rine_group_join`/`rine_group_invites` close the accept-side gap: an agent
+ * invited into a group previously had no tool to join it or see its pending
+ * invites (only create/invite/remove/inspect existed).
  */
 
 import { createTool } from "@mastra/core/tools";
@@ -20,11 +24,13 @@ import { UUID_RE, normalizeHandle, resolveToUuid } from "@rine-network/core";
 import { NotFoundError, asAgentUuid, asGroupUuid } from "@rine-network/sdk";
 import type { AsyncRineClient } from "@rine-network/sdk";
 import { strResult, type z } from "./_zod.js";
-import { groupIsMls, renderGroup } from "./format.js";
+import { groupIsMls, renderGroup, renderInvites } from "./format.js";
 import {
 	groupCreateInput,
 	groupInspectInput,
 	groupInviteInput,
+	groupInvitesInput,
+	groupJoinInput,
 	groupRemoveInput,
 } from "./schemas.js";
 import { type RineToolOpts, makeExecute } from "./tool.js";
@@ -86,6 +92,37 @@ async function resolveGroupUuid(client: AsyncRineClient, target: string) {
 async function resolveAgentUuid(apiUrl: string, target: string) {
 	if (isUuid(target)) return asAgentUuid(target);
 	return asAgentUuid(await resolveToUuid(apiUrl, target));
+}
+
+/**
+ * Resolve a group handle/UUID to its `GroupUuid` for `rine_group_join`. Unlike
+ * `resolveGroupUuid` (which searches `groups.list()` — groups the agent
+ * ALREADY belongs to, so it can never see a group the agent has only been
+ * invited to), this searches the caller's PENDING invites
+ * (`groups.listInvites()`, enriched with `group_handle`/`group_name`) by UUID,
+ * full handle, or bare local name.
+ */
+async function resolveJoinGroupUuid(client: AsyncRineClient, target: string) {
+	if (isUuid(target)) return asGroupUuid(target);
+	const invites = await client.groups.listInvites();
+	const bare = !target.includes("@");
+	const want = bare
+		? bareLocalName(target)
+		: normalizeHandle(target.startsWith("#") ? target : `#${target}`);
+	const match = invites.find((r) => {
+		if (r.group_handle) {
+			return bare
+				? bareLocalName(r.group_handle) === want
+				: normalizeHandle(r.group_handle) === want;
+		}
+		return bare && r.group_name === target;
+	});
+	if (!match) {
+		throw new NotFoundError(
+			`No pending invite for group '${target}' — check rine_group_invites, or pass the group's UUID directly for an open-enrollment group`,
+		);
+	}
+	return asGroupUuid(match.group_id);
 }
 
 /** `rine_group_create` — create an MLS-by-default coordination group. */
@@ -180,6 +217,49 @@ export function createRineGroupInspectTool(opts: RineToolOpts = {}) {
 					);
 				}
 				return renderGroup(match);
+			},
+		),
+	});
+}
+
+/** `rine_group_join` — accept a pending invite / request to join (handle→UUID pre-resolved). */
+export function createRineGroupJoinTool(opts: RineToolOpts = {}) {
+	return createTool({
+		id: "rine_group_join",
+		description:
+			"Join a group your agent was invited to (handle resolved against your pending invites — see rine_group_invites) or request to join an open group by UUID. Returns whether the join completed immediately or is pending approval. This is a real, irreversible network action.",
+		inputSchema: groupJoinInput,
+		outputSchema: strResult,
+		mcp: { annotations: { destructiveHint: true } },
+		execute: makeExecute<z.infer<typeof groupJoinInput>>(
+			opts,
+			async (client, i) => {
+				const groupId = await resolveJoinGroupUuid(client, i.group);
+				const result = await client.groups.join(groupId, {
+					message: i.message,
+				});
+				if (result.status === "pending") {
+					return `Join request for ${i.group} is pending approval (request ${result.request.id}).`;
+				}
+				return `Joined ${i.group} (member id ${result.member.id ?? result.member.agent_id}).`;
+			},
+		),
+	});
+}
+
+/** `rine_group_invites` — list the caller's own pending group invites. */
+export function createRineGroupInvitesTool(opts: RineToolOpts = {}) {
+	return createTool({
+		id: "rine_group_invites",
+		description:
+			"List the pending group invites and join requests for your agent, so you know which groups you can accept with rine_group_join.",
+		inputSchema: groupInvitesInput,
+		outputSchema: strResult,
+		execute: makeExecute<z.infer<typeof groupInvitesInput>>(
+			opts,
+			async (client) => {
+				const invites = await client.groups.listInvites();
+				return renderInvites(invites);
 			},
 		),
 	});

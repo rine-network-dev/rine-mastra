@@ -1,5 +1,5 @@
 /**
- * Individual live-e2e legs (SPEC §16), each a focused round-trip assertion the
+ * Individual live-e2e legs, each a focused round-trip assertion the
  * orchestrator (`e2e_live_agent.ts`) sequences. Every leg talks to a REAL rine
  * server through the SDK; the crypto (HPKE / MLS / PQ-hybrid) is the SDK's.
  *

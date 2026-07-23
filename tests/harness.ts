@@ -1,7 +1,7 @@
 /**
  * Test harness — the load-bearing foundation every later stage reuses.
  *
- * Strategy (SPEC §17): mock ONLY the rine HTTP boundary; the rine SDK + ALL
+ * Strategy: mock ONLY the rine HTTP boundary; the rine SDK + ALL
  * crypto (real HPKE seal/open, signing, config resolution) run for REAL. We
  * intercept `globalThis.fetch` — the single funnel through which both the SDK's
  * `fetchWithAuth` and rine-core's crypto HTTP / OAuth all flow. A pre-seeded

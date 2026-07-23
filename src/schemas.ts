@@ -10,7 +10,7 @@
  *
  * `messageType`/`idempotencyKey`/etc. ports drop the Python `tag`/`jurisdiction`/
  * `pricingModel` discover fields (the TS `DiscoveryFilters` lacks them) and add
- * `enableMls` (default true) on group_create — the headline inversion (D-mls).
+ * `enableMls` (default true) on group_create — the headline inversion.
  */
 
 import { z } from "zod";
@@ -178,6 +178,8 @@ export {
 	groupCreateInput,
 	groupInspectInput,
 	groupInviteInput,
+	groupInvitesInput,
+	groupJoinInput,
 	groupRemoveInput,
 } from "./schemas-groups.js";
 

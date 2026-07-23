@@ -6,7 +6,7 @@
  *   1. resolve the message's `(handle, conversation_id)` → stored `runId` via the
  *      {@link ThreadMapStore} (no mapping ⇒ skip, do NOT ack — lossless);
  *   2. **rehydrate the snapshot via `getWorkflowRunById(runId)` BEFORE resume**
- *      (the load-bearing P0-10 recipe; defends mastra #5521 where
+ *      (the load-bearing recipe; defends mastra #5521 where
  *      `createRun({runId})` would otherwise read an empty in-process run-map);
  *      a non-suspended / unknown run ⇒ skip, do NOT ack;
  *   3. build `resumeData` from `plaintext` / `verified` / `from` ONLY
@@ -14,7 +14,7 @@
  *      decrypt-failed message ⇒ skip, do NOT ack;
  *   4. `createRun({runId}).resume({ step, resumeData })` to continue the run.
  *
- * **Lossless-by-default (langchain D16):** every skip path leaves the message in
+ * **Lossless-by-default:** every skip path leaves the message in
  * the rine inbox (no `markDelivered`), so a later poll can retry after the run is
  * mapped / key recovery succeeds. The resumer NEVER acks.
  */
@@ -24,7 +24,7 @@ import type { ThreadMapStore } from "./threadmap.js";
 import type { DecryptedMessage } from "./types.js";
 
 /**
- * The minimal Mastra-workflow surface the resumer drives (the P0-10 recipe). A
+ * The minimal Mastra-workflow surface the resumer drives (the recipe). A
  * real `mastra.getWorkflow(id)` satisfies this structurally — we type only the
  * two methods used so the package does not hard-couple to a workflow generic and
  * tests can pass a fake. `step` is the suspended step (a `createStep` object or
@@ -67,7 +67,7 @@ export interface ResumeData {
 
 /** Options for {@link RineThreadResumer}. */
 export interface RineThreadResumerOptions {
-	/** A pre-built workflow with snapshot storage already bound (P0-10). */
+	/** A pre-built workflow with snapshot storage already bound. */
 	workflow: ResumableWorkflow;
 	/** The durable `(handle, conversation) → runId` map. */
 	threadMap: ThreadMapStore;
@@ -147,7 +147,7 @@ export class RineThreadResumer {
 			return { resumed: false, reason: "no-map" };
 		}
 
-		// Rehydrate from SHARED storage BEFORE resume (P0-10; defends #5521). A run
+		// Rehydrate from SHARED storage BEFORE resume (defends #5521). A run
 		// that is gone or no longer suspended must not be resumed — skip losslessly.
 		const snapshot = await this.workflow.getWorkflowRunById(runId);
 		if (!snapshot || snapshot.status !== "suspended") {

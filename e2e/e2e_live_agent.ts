@@ -1,5 +1,5 @@
 /**
- * Live-LLM end-to-end e2e (SPEC §16). AUTHORED for Phase F to RUN — it is NOT run
+ * Live-LLM end-to-end e2e. AUTHORED to RUN — it is NOT run
  * here (no creds / no LLM in this environment). It reads secrets by name from a
  * gitignored `.e2e.env` (see `_env.ts`) and is a runnable `tsx` script:
  *

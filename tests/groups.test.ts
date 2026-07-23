@@ -1,8 +1,10 @@
 /**
- * The 4 group tools, through their public Mastra `execute` interface against the
+ * The 6 group tools, through their public Mastra `execute` interface against the
  * real SDK + a mock boundary. Covers AC-6 (enableMls accepted/MLS-latched), AC-7
- * (`[OK] MLS` render), AC-2 (error paths resolve), and the handle→UUID
- * pre-resolution for invite/remove/inspect (D-handle-resolve).
+ * (`[OK] MLS` render), AC-2 (error paths resolve), the handle→UUID
+ * pre-resolution for invite/remove/inspect, and (NEW-1) `rine_group_join` /
+ * `rine_group_invites` — the accept-side tools an invited agent previously had
+ * no way to call.
  *
  * `groups.create`'s best-effort MLS init runs real rine-core MLS code against the
  * mock boundary; tests stub the MLS endpoints loosely (the init is non-fatal, so
@@ -14,6 +16,8 @@ import {
 	createRineGroupCreateTool,
 	createRineGroupInspectTool,
 	createRineGroupInviteTool,
+	createRineGroupInvitesTool,
+	createRineGroupJoinTool,
 	createRineGroupRemoveTool,
 } from "../src/groups.js";
 import {
@@ -21,6 +25,7 @@ import {
 	type Harness,
 	PEER_AGENT_ID,
 	PEER_HANDLE,
+	SELF_AGENT_ID,
 	makeHarness,
 	runTool,
 } from "./harness.js";
@@ -352,5 +357,194 @@ describe("rine_group_remove (handle→UUID pre-resolution)", () => {
 		expect(h.requests.some((r) => r.path.startsWith("/directory/"))).toBe(
 			false,
 		);
+	});
+});
+
+const REQUEST_ID = "99999999-9999-4999-8999-999999999999";
+
+describe("rine_group_join (invite-list resolution, NOT groups.list())", () => {
+	it("resolves a group handle via the caller's pending invites, then joins immediately", async () => {
+		h.route("GET", /^\/groups\/invites$/, () => ({
+			json: {
+				items: [
+					{
+						id: REQUEST_ID,
+						group_id: GROUP_ID,
+						agent_id: SELF_AGENT_ID,
+						status: "invited",
+						created_at: "2026-06-11T00:00:00.000Z",
+						group_handle: GROUP_HANDLE,
+						group_name: "Ops",
+					},
+				],
+				total: 1,
+				next_cursor: null,
+				prev_cursor: null,
+			},
+		}));
+		let joinBody: Record<string, unknown> | undefined;
+		h.route("POST", new RegExp(`^/groups/${GROUP_ID}/join$`), (req) => {
+			joinBody = req.body as Record<string, unknown>;
+			return {
+				json: {
+					id: "44444444-4444-4444-8444-444444444444",
+					group_id: GROUP_ID,
+					agent_id: SELF_AGENT_ID,
+					role: "member",
+					joined_at: "2026-06-11T00:00:00.000Z",
+				},
+			};
+		});
+		// MLS Welcome install best-effort (non-fatal if it 404s/errors).
+		h.route("GET", new RegExp(`^/groups/${GROUP_ID}$`), () => ({
+			json: groupJson(),
+		}));
+
+		const tool = createRineGroupJoinTool({
+			configDir: h.configDir,
+			apiUrl: API_URL,
+		});
+		const out = await runTool(
+			tool,
+			{ group: GROUP_HANDLE, message: "let me in" },
+			h,
+		);
+
+		expect(out).toBe(
+			`Joined ${GROUP_HANDLE} (member id 44444444-4444-4444-8444-444444444444).`,
+		);
+		expect(joinBody).toMatchObject({ message: "let me in" });
+		// groups.list() (member-only) was never consulted for resolution.
+		expect(h.requests.some((r) => /^\/groups$/.test(r.path))).toBe(false);
+	});
+
+	it("a closed-enrollment invite resolves to a pending join request", async () => {
+		h.route("GET", /^\/groups\/invites$/, () => ({
+			json: {
+				items: [
+					{
+						id: REQUEST_ID,
+						group_id: GROUP_ID,
+						agent_id: SELF_AGENT_ID,
+						status: "invited",
+						created_at: "2026-06-11T00:00:00.000Z",
+						group_handle: GROUP_HANDLE,
+						group_name: "Ops",
+					},
+				],
+				total: 1,
+				next_cursor: null,
+				prev_cursor: null,
+			},
+		}));
+		h.route("POST", new RegExp(`^/groups/${GROUP_ID}/join$`), () => ({
+			status: 202,
+			json: {
+				id: REQUEST_ID,
+				group_id: GROUP_ID,
+				agent_id: SELF_AGENT_ID,
+				status: "pending",
+				created_at: "2026-06-11T00:00:00.000Z",
+				group_handle: GROUP_HANDLE,
+				group_name: "Ops",
+			},
+		}));
+
+		const tool = createRineGroupJoinTool({
+			configDir: h.configDir,
+			apiUrl: API_URL,
+		});
+		const out = await runTool(tool, { group: GROUP_HANDLE }, h);
+		expect(out).toBe(
+			`Join request for ${GROUP_HANDLE} is pending approval (request ${REQUEST_ID}).`,
+		);
+	});
+
+	it("a bare UUID joins directly without consulting the invite list", async () => {
+		let inviteListHit = false;
+		h.route("GET", /^\/groups\/invites$/, () => {
+			inviteListHit = true;
+			return {
+				json: { items: [], total: 0, next_cursor: null, prev_cursor: null },
+			};
+		});
+		h.route("POST", new RegExp(`^/groups/${GROUP_ID}/join$`), () => ({
+			json: {
+				id: "44444444-4444-4444-8444-444444444444",
+				group_id: GROUP_ID,
+				agent_id: SELF_AGENT_ID,
+				role: "member",
+				joined_at: "2026-06-11T00:00:00.000Z",
+			},
+		}));
+		h.route("GET", new RegExp(`^/groups/${GROUP_ID}$`), () => ({
+			json: groupJson(),
+		}));
+
+		const tool = createRineGroupJoinTool({
+			configDir: h.configDir,
+			apiUrl: API_URL,
+		});
+		const out = await runTool(tool, { group: GROUP_ID }, h);
+		expect(out).toBe(
+			`Joined ${GROUP_ID} (member id 44444444-4444-4444-8444-444444444444).`,
+		);
+		expect(inviteListHit).toBe(false);
+	});
+
+	it("AC-2: no matching invite resolves to the not-found string", async () => {
+		h.route("GET", /^\/groups\/invites$/, () => ({
+			json: { items: [], total: 0, next_cursor: null, prev_cursor: null },
+		}));
+		const tool = createRineGroupJoinTool({
+			configDir: h.configDir,
+			apiUrl: API_URL,
+		});
+		const out = await runTool(tool, { group: "#nope@acme" }, h);
+		expect(out).toContain("Not found:");
+		expect(out).toContain("No pending invite for group '#nope@acme'");
+	});
+});
+
+describe("rine_group_invites (list the caller's pending invites)", () => {
+	it("renders each pending invite with its group + request id + status", async () => {
+		h.route("GET", /^\/groups\/invites$/, () => ({
+			json: {
+				items: [
+					{
+						id: REQUEST_ID,
+						group_id: GROUP_ID,
+						agent_id: SELF_AGENT_ID,
+						status: "invited",
+						created_at: "2026-06-11T00:00:00.000Z",
+						group_handle: GROUP_HANDLE,
+						group_name: "Ops",
+					},
+				],
+				total: 1,
+				next_cursor: null,
+				prev_cursor: null,
+			},
+		}));
+		const tool = createRineGroupInvitesTool({
+			configDir: h.configDir,
+			apiUrl: API_URL,
+		});
+		const out = await runTool(tool, {}, h);
+		expect(out).toContain(GROUP_HANDLE);
+		expect(out).toContain(REQUEST_ID);
+		expect(out).toContain("invited");
+	});
+
+	it("the empty-state line when there are no pending invites", async () => {
+		h.route("GET", /^\/groups\/invites$/, () => ({
+			json: { items: [], total: 0, next_cursor: null, prev_cursor: null },
+		}));
+		const tool = createRineGroupInvitesTool({
+			configDir: h.configDir,
+			apiUrl: API_URL,
+		});
+		const out = await runTool(tool, {}, h);
+		expect(out).toBe("No pending group invites.");
 	});
 });

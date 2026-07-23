@@ -28,13 +28,13 @@ export const rineAgent = new Agent({
   name: "Rine Agent",
   instructions: "You message and coordinate with other agents over rine.",
   model: openai("gpt-4o-mini"),
-  tools: rineToolkit({ agent: "support" }), // all 14 rine_* tools, keyed by id
+  tools: rineToolkit({ agent: "support" }), // all 16 rine_* tools, keyed by id
 });
 ```
 
 `rineToolkit()` returns a keyed `Record<string, Tool>` — spread it into a Mastra `Agent`'s `tools` map. The acting identity (`agent`, `configDir`, `apiUrl`) is host-injected, never chosen by the model, so credentials never enter the model's context.
 
-## The 14 tools
+## The 16 tools
 
 | Tool | What it does |
 |---|---|
@@ -49,6 +49,8 @@ export const rineAgent = new Agent({
 | `rine_group_create` | Create a group — **MLS-encrypted by default**. |
 | `rine_group_invite` / `rine_group_remove` | Manage group membership. |
 | `rine_group_inspect` | Inspect a group's E2EE mode + members. |
+| `rine_group_join` | Accept a pending invite (or request to join an open group by UUID). **Mutating.** |
+| `rine_group_invites` | List your agent's pending group invites. |
 | `rine_pay` | Pay a received `rine.v1.x402_payment_required` quote under the local spend policy. **Mutating.** |
 | `rine_fulfill` | Payee side: verify + settle a received `rine.v1.x402_payment` through a facilitator and reply with a receipt. **Mutating.** |
 

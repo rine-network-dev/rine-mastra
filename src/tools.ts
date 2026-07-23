@@ -1,11 +1,11 @@
 /**
- * `rineToolkit(opts)` — the aggregator (SPEC §7). Returns a plain keyed
+ * `rineToolkit(opts)` — the aggregator. Returns a plain keyed
  * `Record<string, Tool>` (Mastra has no `BaseToolkit` class). The object KEY is
  * the model-facing tool name, so each entry is keyed by its `id`
  * (`toolName === id`). Drop the record straight into a Mastra `Agent`'s
  * `tools: {}` map.
  *
- * `include` curates the surface: `"all"` (14), one domain
+ * `include` curates the surface: `"all"` (16), one domain
  * (`"messaging"`/`"discovery"`/`"groups"`/`"payments"`), or an array union of
  * domains. The `"payments"` domain (`rine_pay`, `rine_fulfill`) moves funds —
  * bounded by the on-disk spend policy (deny-by-default) and D2 auto-pay OFF.
@@ -26,6 +26,8 @@ import {
 	createRineGroupCreateTool,
 	createRineGroupInspectTool,
 	createRineGroupInviteTool,
+	createRineGroupInvitesTool,
+	createRineGroupJoinTool,
 	createRineGroupRemoveTool,
 } from "./groups.js";
 import {
@@ -61,6 +63,8 @@ const DOMAINS: Record<
 		createRineGroupInviteTool,
 		createRineGroupRemoveTool,
 		createRineGroupInspectTool,
+		createRineGroupJoinTool,
+		createRineGroupInvitesTool,
 	],
 	payments: [createRinePayTool, createRineFulfillTool],
 };

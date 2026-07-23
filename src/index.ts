@@ -21,7 +21,7 @@ export type { RineClientOpts } from "./client.js";
 export { formatError } from "./errors.js";
 export type { RinePaymentToolOpts, RineToolOpts } from "./tool.js";
 
-// The 12 tool factories
+// The 16 tool factories
 export {
 	createRineCheckInboxTool,
 	createRineReadTool,
@@ -30,20 +30,16 @@ export {
 	createRineSendTool,
 	createRineThreadTool,
 } from "./messaging.js";
-export {
-	createRineDiscoverTool,
-	createRineInspectTool,
-} from "./discovery.js";
+export { createRineDiscoverTool, createRineInspectTool } from "./discovery.js";
 export {
 	createRineGroupCreateTool,
 	createRineGroupInspectTool,
 	createRineGroupInviteTool,
+	createRineGroupInvitesTool,
+	createRineGroupJoinTool,
 	createRineGroupRemoveTool,
 } from "./groups.js";
-export {
-	createRineFulfillTool,
-	createRinePayTool,
-} from "./payments.js";
+export { createRineFulfillTool, createRinePayTool } from "./payments.js";
 
 // The toolkit aggregator
 export { rineToolkit } from "./tools.js";
@@ -61,7 +57,7 @@ export type {
 	RineLifecycleOptions,
 } from "./lifecycle.js";
 
-// Tier-3 true idle-wake — workflow-resume bridge (the differentiator, SPEC §9)
+// Tier-3 true idle-wake — workflow-resume bridge (the differentiator)
 export { RineThreadResumer } from "./inbound.js";
 export type {
 	ResumableRun,
@@ -71,14 +67,8 @@ export type {
 	RineThreadResumerOptions,
 	WorkflowSnapshot,
 } from "./inbound.js";
-export {
-	InMemoryThreadMap,
-	SqliteThreadMap,
-} from "./threadmap.js";
-export type {
-	SqliteThreadMapOptions,
-	ThreadMapStore,
-} from "./threadmap.js";
+export { InMemoryThreadMap, SqliteThreadMap } from "./threadmap.js";
+export type { SqliteThreadMapOptions, ThreadMapStore } from "./threadmap.js";
 export { makeWebhookHandler, PollDriver } from "./drivers.js";
 export type {
 	PollDriverOptions,
@@ -91,11 +81,7 @@ export { parseOnboardArgs, runOnboard } from "./onboard.js";
 export type { OnboardArgs, OnboardIO, OnboardOptions } from "./onboard.js";
 
 // Identity-injection RequestContext keys (host apps set these on the ctx)
-export {
-	RINE_ACTING_AGENT,
-	RINE_API_URL,
-	RINE_CONFIG_DIR,
-} from "./context.js";
+export { RINE_ACTING_AGENT, RINE_API_URL, RINE_CONFIG_DIR } from "./context.js";
 export type { RineToolContext } from "./context.js";
 
 // SDK-derived return types (re-derived from the SDK schemas)
@@ -105,5 +91,6 @@ export type {
 	DecryptedMessage,
 	GroupRead,
 	InviteResult,
+	JoinRequestRead,
 	MessageRead,
 } from "./types.js";

@@ -1,5 +1,5 @@
 /**
- * Tier-3 cross-process suspend/resume demo for the live e2e (SPEC §16 / §9).
+ * Tier-3 cross-process suspend/resume demo for the live e2e.
  *
  * Builds a real Mastra workflow whose single step `suspend()`s waiting for a rine
  * reply, runs it to suspension, persists `(handle, conversation) → runId` into a

@@ -120,7 +120,7 @@ export function asRecipient(to: string): Recipient {
 
 /**
  * I-2 layer (c): the belt-and-suspenders ciphertext redactor for `read` /
- * `check_inbox` (SPEC §2.2 / D-output). Layers (a) plaintext-only renderers and
+ * `check_inbox`. Layers (a) plaintext-only renderers and
  * (b) `outputSchema: z.string()` already guarantee the `execute` return is a
  * redacted string; this coerces ANY value to plain text content before it can
  * reach the model, so even a regression that returned a richer object containing

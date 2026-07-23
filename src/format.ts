@@ -1,9 +1,9 @@
 /**
  * Pure render functions: turn SDK return values into the human-readable strings
  * tools hand back to the LLM. Ported field-for-field from the Python `_format.py`
- * (`AGENT_OUT_precedent_blueprint.md §6`) — same snake_case wire field names —
+ * — same snake_case wire field names —
  * with ONE inversion: the group MLS branch reads `[OK]` instead of `[WARN]`,
- * because the TS SDK fully reads/posts MLS + PQ traffic (D-mls).
+ * because the TS SDK fully reads/posts MLS + PQ traffic.
  *
  * Invariant I-2: these read ONLY `plaintext` / `decrypt_error` / verification
  * fields. They NEVER read `encrypted_payload` or any envelope/ciphertext field,
@@ -16,6 +16,7 @@ import type {
 	AgentSummary,
 	DecryptedMessage,
 	GroupRead,
+	JoinRequestRead,
 } from "./types.js";
 
 /** One thread turn as a role-tagged line: `[sent] you: …` / `[received] alice@org: …`. */
@@ -157,4 +158,16 @@ export function renderGroup(g: GroupRead): string {
 	lines.push(`enrollment: ${g.enrollment_policy}`);
 	lines.push(`visibility: ${g.visibility}`);
 	return lines.join("\n");
+}
+
+/** One pending-invite row for `rine_group_invites`. */
+function renderInviteRow(r: JoinRequestRead): string {
+	const group = r.group_handle ?? r.group_name ?? r.group_id;
+	return `${group}: request ${r.id} (status ${r.status})`;
+}
+
+/** A numbered list of the caller's pending group invites, or the empty-state line. */
+export function renderInvites(items: readonly JoinRequestRead[]): string {
+	if (items.length === 0) return "No pending group invites.";
+	return items.map((r, i) => `${i + 1}. ${renderInviteRow(r)}`).join("\n");
 }

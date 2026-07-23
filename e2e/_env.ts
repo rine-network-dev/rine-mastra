@@ -1,7 +1,7 @@
 /**
  * Live-e2e environment loader. Reads secrets from a gitignored `.e2e.env` at the
  * package root (KEY=value lines), falling back to `process.env`. NEVER commit
- * `.e2e.env` (it is gitignored). Phase F supplies the real values; this module
+ * `.e2e.env` (it is gitignored). The live e2e supplies the real values; this module
  * only resolves them by name so the script stays declarative.
  *
  * Shares the crewai/langchain sibling `.e2e.env` contract (same secrets):

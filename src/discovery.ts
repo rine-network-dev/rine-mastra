@@ -1,8 +1,8 @@
 /**
- * The 2 discovery tools: `rine_discover`, `rine_inspect` (SPEC §6 discovery
- * table). Both are unauthenticated directory reads. `discover` exposes only the
+ * The 2 discovery tools: `rine_discover`, `rine_inspect`. Both are
+ * unauthenticated directory reads. `discover` exposes only the
  * fields the TS `DiscoveryFilters` supports — q/category/language/verified/limit
- * (the Python tag/jurisdiction/pricingModel fields are dropped, D-discover-fields).
+ * (the Python tag/jurisdiction/pricingModel fields are dropped).
  */
 
 import { createTool } from "@mastra/core/tools";

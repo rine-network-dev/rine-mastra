@@ -1,6 +1,6 @@
 /**
  * The 5 messaging tools, driven through their public Mastra `execute` interface
- * against the real SDK + real crypto + a mock HTTP boundary (SPEC §6 / §17).
+ * against the real SDK + real crypto + a mock HTTP boundary.
  *
  * Covers: AC-1 (happy strings vs observable HTTP), AC-2 (error paths resolve,
  * never reject), AC-3/I-2 (ciphertext absent on every messaging path), AC-4
@@ -403,7 +403,7 @@ describe("rine_read / rine_reply (AC-1, AC-3, AC-9)", () => {
 		expect(out).not.toContain(env.encrypted_payload);
 	});
 
-	it("REQ-FORK-01: reply-in-place keeps the inbound conversation (reply endpoint), default type task_response", async () => {
+	it("reply-in-place keeps the inbound conversation (reply endpoint), default type task_response", async () => {
 		let replyBody: Record<string, unknown> | undefined;
 		h.route("POST", new RegExp(`^/messages/${MSG_UUID}/reply$`), (req) => {
 			replyBody = req.body as Record<string, unknown>;
@@ -456,18 +456,18 @@ describe("rine_read / rine_reply (AC-1, AC-3, AC-9)", () => {
 			h.requests.filter((r) => r.method === "POST" && r.path === "/messages"),
 		).toHaveLength(0);
 		// Type is the reply default (task_response) — NOT forced to task_request,
-		// so a peer Eve's loop guard still treats it as terminal (REQ-FORK-01).
+		// so a peer Eve's loop guard still treats it as terminal.
 		expect(replyBody?.type).toBe("rine.v1.task_response");
 	});
 
-	it("REQ-FORK-01: tool descriptions steer follow-ups to rine_reply (same thread) over rine_send (new conversation)", () => {
+	it("tool descriptions steer follow-ups to rine_reply (same thread) over rine_send (new conversation)", () => {
 		const reply = createRineReplyTool();
 		const send = createRineSendTool();
 		expect(reply.description?.toLowerCase()).toContain("same conversation");
 		expect(send.description?.toLowerCase()).toContain("new conversation");
 	});
 
-	it("REQ-TOOL-01: rine_thread renders the both-sided transcript role-tagged (pull-only)", async () => {
+	it("rine_thread renders the both-sided transcript role-tagged (pull-only)", async () => {
 		// A received turn from the peer, sealed to us (real crypto via the harness).
 		const recv = await h.selfEncrypt({ text: "peer turn one" });
 		h.route("GET", new RegExp(`^/conversations/${CONV_UUID}/messages$`), () => ({

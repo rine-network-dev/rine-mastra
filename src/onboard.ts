@@ -1,5 +1,5 @@
 /**
- * Setup helper — `npx @rine-network/mastra onboard` (SPEC §11, D-not-tools).
+ * Setup helper — `npx @rine-network/mastra onboard`.
  *
  * Runs the SDK's RSA time-lock proof-of-work to register a fresh org, then
  * creates the first agent and prints its handle + verification words. This is
@@ -11,7 +11,7 @@
  * to the SDK's `register(opts)` (over rine-core `performRegistration`); the agent
  * keypair is generated + persisted by `client.createAgent(name)`.
  *
- * Config resolution is explicit (D-config-resolve): `register` REQUIRES concrete
+ * Config resolution is explicit: `register` REQUIRES concrete
  * `apiUrl`/`configDir` strings, so we resolve them via rine-core unless the caller
  * passed overrides (the SDK never resolves them itself).
  */

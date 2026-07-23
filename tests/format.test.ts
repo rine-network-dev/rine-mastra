@@ -1,5 +1,5 @@
 /**
- * Renderer behavior (SPEC §6 / `AGENT_OUT_precedent_blueprint.md §6`):
+ * Renderer behavior:
  *   - the plaintext-is-JSON footgun (`unwrapText`)
  *   - honest signature notes (`verifiedNote`)
  *   - the MLS-branch INVERSION (`renderGroup` → `[OK]` for MLS, capability not ceiling)
@@ -148,7 +148,7 @@ describe("renderDiscover / renderProfile", () => {
 	});
 });
 
-describe("renderGroup — MLS branch INVERSION (D-mls)", () => {
+describe("renderGroup — MLS branch INVERSION", () => {
 	it("MLS group renders [OK] readable/postable, not a [WARN] ceiling", () => {
 		const out = renderGroup(
 			group({ mls_enabled: true, mls_group_id: "mls-abc" }),

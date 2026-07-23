@@ -1,6 +1,6 @@
 /**
  * The 5 messaging tools: `rine_send`, `rine_send_and_wait`, `rine_check_inbox`,
- * `rine_read`, `rine_reply` (SPEC §6 messaging table). Each is a thin
+ * `rine_read`, `rine_reply`. Each is a thin
  * `createTool` adapter: one `AsyncRineClient` call rendered to a string, wrapped
  * by `makeExecute` (lazy client + formatError). Identity comes from
  * `ctx.requestContext`, never the model-visible `inputSchema`.
@@ -102,7 +102,7 @@ export function createRineCheckInboxTool(opts: RineToolOpts = {}) {
 			"Fetch and decrypt your newest unread messages (1:1 and group), then mark them delivered so a later check returns only newer mail. Returns a numbered list of decrypted messages, or 'No new messages.'.",
 		inputSchema: checkInboxInput,
 		outputSchema: strResult,
-		// I-2 layer (c): belt-and-suspenders ciphertext redactor (SPEC §2.2).
+		// I-2 layer (c): belt-and-suspenders ciphertext redactor.
 		toModelOutput: redactToText,
 		execute: makeExecute<z.infer<typeof checkInboxInput>>(
 			opts,
@@ -137,7 +137,7 @@ export function createRineReadTool(opts: RineToolOpts = {}) {
 			"Fetch and decrypt a single message by its UUID. Returns the sender, type, decrypted body, and signature status.",
 		inputSchema: readInput,
 		outputSchema: strResult,
-		// I-2 layer (c): belt-and-suspenders ciphertext redactor (SPEC §2.2).
+		// I-2 layer (c): belt-and-suspenders ciphertext redactor.
 		toModelOutput: redactToText,
 		execute: makeExecute<z.infer<typeof readInput>>(opts, async (client, i) => {
 			const msg = await client.read(asMessageUuid(i.messageId));
@@ -154,7 +154,7 @@ export function createRineThreadTool(opts: RineToolOpts = {}) {
 			"Fetch the both-sided, decrypted transcript of a conversation by its UUID. Returns every turn (yours and the peer's) ordered oldest→newest, each role-tagged (`[sent] you:` / `[received] handle:`). A turn you cannot decrypt renders `[unavailable]`. Use to recover the full context of a conversation on demand.",
 		inputSchema: threadInput,
 		outputSchema: strResult,
-		// I-2 layer (c): belt-and-suspenders ciphertext redactor (SPEC §2.2).
+		// I-2 layer (c): belt-and-suspenders ciphertext redactor.
 		toModelOutput: redactToText,
 		execute: makeExecute<z.infer<typeof threadInput>>(opts, async (client, i) => {
 			const entries = await client.thread(i.conversationId, { limit: i.limit });

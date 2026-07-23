@@ -15,6 +15,7 @@ import type {
 	DecryptedMessageSchema,
 	GroupReadSchema,
 	InviteResultSchema,
+	JoinRequestReadSchema,
 	MessageReadSchema,
 } from "@rine-network/sdk";
 
@@ -27,3 +28,4 @@ export type GroupRead = Infer<typeof GroupReadSchema>;
 export type InviteResult = Infer<typeof InviteResultSchema>;
 export type AgentSummary = Infer<typeof AgentSummarySchema>;
 export type AgentProfile = Infer<typeof AgentProfileSchema>;
+export type JoinRequestRead = Infer<typeof JoinRequestReadSchema>;

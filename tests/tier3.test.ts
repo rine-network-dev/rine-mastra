@@ -1,5 +1,5 @@
 /**
- * Tier-3 true idle-wake (SPEC §9, the differentiator).
+ * Tier-3 true idle-wake (the differentiator).
  *
  * AC-12 (BLOCKING, the headline): suspend a Mastra workflow in ONE process,
  * resume it in a FRESH child process through the production `RineThreadResumer`
@@ -296,7 +296,7 @@ describe("RineThreadResumer.handleInbound — skip paths never ack (lossless)", 
 		expect(resumeData).toMatchObject({ from: agentUuid });
 	});
 
-	it("REQ-CTX-02: resumeData injects NO rine transcript (no double-context)", async () => {
+	it("resumeData injects NO rine transcript (no double-context)", async () => {
 		// mastra relies on the durable host session store + the pull tool, NOT a
 		// pushed transcript. The resumed step gets ONLY plaintext + signature facts.
 		const f = fakeWorkflow("suspended");
