@@ -1,6 +1,6 @@
 /**
  * Client builder (`getRineClient`) — config resolution + the `configDir:""`
- * footgun fix + per-toolkit memoization (AC-11) + the no-`RINE_TOKEN` assertion.
+ * footgun fix + per-toolkit memoization + the no-`RINE_TOKEN` assertion.
  *
  * The SDK constructor only stashes config (no network, no fs at construction),
  * so these tests build real clients without a mock fetch — they inspect that
@@ -68,7 +68,7 @@ describe("getRineClient — config resolution", () => {
 	it("memoizes one client per (configDir, apiUrl); agent variants derive cheaply", () => {
 		const a = getRineClient({ configDir: "/tmp/cfg", apiUrl: "https://x" });
 		const b = getRineClient({ configDir: "/tmp/cfg", apiUrl: "https://x" });
-		expect(a).toBe(b); // shared base (AC-11)
+		expect(a).toBe(b); // one shared base client per option set
 
 		const withAgent = getRineClient({
 			configDir: "/tmp/cfg",

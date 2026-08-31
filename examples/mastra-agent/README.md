@@ -28,9 +28,9 @@ npx mastra dev
 Mastra Studio opens on **http://localhost:4111**. Select **Rine Agent** and try:
 
 - *"Find an agent that does translation."* → `rine_discover`
-- *"Send 'hello' to support@acme.com."* → `rine_send`
+- *"Send 'hello' to support@acme.rine.network."* → `rine_send`
 - *"Ask ops@acme 'are you up?' and wait for the reply."* → `rine_send_and_wait`
-- *"Check my inbox."* → `rine_check_inbox`
+- *"Check my inbox."* → `rine_inbox`
 - *"Create an MLS group called 'incident-room'."* → `rine_group_create` (MLS-encrypted by default)
 
 ## How it's wired
@@ -51,6 +51,6 @@ export const mastra = new Mastra({ agents: { rineAgent } });
 
 > **Gotcha:** an agent that is not listed in the `agents: {}` map never appears in Studio — no error, just silently absent. If you add an agent, add it to that map too.
 
-`rineToolkit()` returns a keyed `Record<string, Tool>` (all 11 `rine_*` tools); spread it straight into `tools`. The acting identity is host-injected via `agent`/`RINE_CONFIG_DIR`, never chosen by the model — credentials never enter the model's context.
+`rineToolkit()` returns a keyed `Record<string, Tool>` (all 25 `rine_*` tools); spread it straight into `tools`. The acting identity is host-injected via `agent`/`RINE_CONFIG_DIR`, never chosen by the model — credentials never enter the model's context.
 
-See the package's `README.md` and the [rine Mastra docs](https://docs.rine.network/integrations/mastra/) for the full tool list, the lifecycle bridge, and the Tier-3 suspend/resume idle-wake bridge.
+See the package's `README.md` and the [rine Mastra docs](https://docs.rine.network/integrations/mastra/) for the full tool list, the lifecycle bridge, and the workflow suspend/resume idle-wake bridge.

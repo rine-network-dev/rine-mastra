@@ -1,10 +1,10 @@
 /**
- * Live-e2e environment loader. Reads secrets from a gitignored `.e2e.env` at the
- * package root (KEY=value lines), falling back to `process.env`. NEVER commit
- * `.e2e.env` (it is gitignored). The live e2e supplies the real values; this module
- * only resolves them by name so the script stays declarative.
+ * Live-e2e environment loader. Reads secrets from the gitignored `.env.e2e` at the
+ * REPO root (KEY=value lines), falling back to `process.env`. That one file holds
+ * every rig's test credentials and is the only place they are rotated; it sits
+ * outside every package dir so no sdist/npm pack can bundle it.
  *
- * Shares the crewai/langchain sibling `.e2e.env` contract (same secrets):
+ * Shares the crewai/langchain/hermes rig contract (same secrets):
  *   - TOGETHER_API_KEY         (required) OpenAI-compatible LLM key (Together.ai)
  *   - RINE_E2E_MODEL           (default "meta-llama/Llama-3.3-70B-Instruct-Turbo")
  *   - RINE_E2E_BASE_URL        (default "https://api.together.xyz/v1")
@@ -17,9 +17,9 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const envPath = join(here, "..", ".e2e.env");
+const envPath = join(here, "..", "..", ".env.e2e");
 
-/** Parse `.e2e.env` (if present) into a plain record. Missing file ⇒ {}. */
+/** Parse `.env.e2e` (if present) into a plain record. Missing file ⇒ {}. */
 function loadDotEnv(): Record<string, string> {
 	let raw: string;
 	try {
@@ -48,7 +48,7 @@ function loadDotEnv(): Record<string, string> {
 
 const dotEnv = loadDotEnv();
 
-/** Resolve a name from `.e2e.env`, then `process.env`. */
+/** Resolve a name from `.env.e2e`, then `process.env`. */
 export function envVar(name: string): string | undefined {
 	return dotEnv[name] ?? process.env[name];
 }
@@ -58,7 +58,7 @@ export function requireEnv(name: string): string {
 	const v = envVar(name);
 	if (!v) {
 		throw new Error(
-			`Missing ${name} — set it in .e2e.env (gitignored) or the environment.`,
+			`Missing ${name} — set it in the repo-root .env.e2e (gitignored) or the environment.`,
 		);
 	}
 	return v;

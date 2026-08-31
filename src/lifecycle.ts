@@ -14,14 +14,15 @@
  *   step   → onStepFinish ({toolCalls,…})         → "step: {toolName}"
  *
  * Invariants:
- *   - I-1: opt-in by instantiation; the `AsyncRineClient` is built lazily on the
- *     FIRST fired callback (never at module load or in this factory body).
- *   - I-2: only the model-visible `text` / tool name / error message is summarized
+ *   - Opt-in by instantiation; the `AsyncRineClient` is built lazily on the
+ *     FIRST fired callback (never at module load or in this factory body), so
+ *     importing the package stays side-effect-free.
+ *   - Only the model-visible `text` / tool name / error message is summarized
  *     into the notify body — never ciphertext (these callbacks never see an
  *     envelope).
- *   - Best-effort: each fired callback attempts EXACTLY ONE `client.send` (AC-13);
+ *   - Best-effort: each fired callback attempts EXACTLY ONE `client.send`;
  *     a send failure is swallowed + debug-logged and never thrown out of the
- *     callback (AC-14) — a notify failure must not crash the agent run.
+ *     callback — a notify failure must not crash the agent run.
  */
 
 import { type RineClientOpts, getRineClient } from "./client.js";
@@ -35,7 +36,7 @@ export type RineLifecycleEvent = "finish" | "error" | "step";
 
 /** Options for {@link rineLifecycle}. */
 export interface RineLifecycleOptions extends RineClientOpts {
-	/** Recipient handle/UUID every notify is sent to (`name@org`, `#group@org`). */
+	/** Recipient handle/UUID every notify is sent to (`name@org`, `#logistics@acme.rine.network`). */
 	to: string;
 	/** Which lifecycle events fire a notify. Defaults to `["finish", "error"]`. */
 	on?: readonly RineLifecycleEvent[];
@@ -77,7 +78,8 @@ function eventError(event: unknown): string {
 /**
  * Build the opt-in outbound lifecycle bridge. Returns ONLY the callbacks for the
  * selected events (so `{ ...cb }` never installs a no-op for an unselected one).
- * The client is resolved lazily on the first fired callback (I-1).
+ * The client is resolved lazily on the first fired callback — this factory
+ * builds nothing.
  */
 export function rineLifecycle(
 	opts: RineLifecycleOptions,
@@ -99,7 +101,7 @@ export function rineLifecycle(
 				{ type: "rine.v1.text" },
 			);
 		} catch (err) {
-			// AC-14: never propagate out of the callback — a failed notify must not
+			// Never propagate out of the callback — a failed notify must not
 			// crash the agent run. Debug-log only.
 			console.debug?.("[rine] lifecycle notify failed:", err);
 		}

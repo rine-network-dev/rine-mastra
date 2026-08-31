@@ -1,8 +1,9 @@
 /**
  * Identity injection via Mastra's `RequestContext` (BLOCKING — verified
  * in-rig). The acting agent + config dir are read from `ctx.requestContext`
- * inside a tool's `execute`, NEVER from the model-visible `inputSchema` (I-2 /
- * Mastra's own security rule). Keys are `rine-`-namespaced to avoid collision
+ * inside a tool's `execute`, NEVER from the model-visible `inputSchema` — the
+ * host injects the identity, the model never chooses it (also Mastra's own
+ * security rule). Keys are `rine-`-namespaced to avoid collision
  * with Mastra's reserved `mastra__*` keys.
  *
  * Import the `RequestContext` class itself from `@mastra/core/request-context`

@@ -12,8 +12,8 @@
  *     script for the resumer wiring).
  *
  * Built on the SDK's native SSE delivery (`defineAgent`) — no polling. The SDK
- * does all crypto; this file never touches an envelope (I-2: it reads
- * `msg.plaintext` only, replies in plaintext).
+ * does all crypto; this file never touches an envelope — it reads
+ * `msg.plaintext` only and replies in plaintext.
  *
  * NOT a unit test — it talks to a real rine server. The live e2e onboards a
  * throwaway org, runs this responder as a second agent, then erases the org.
@@ -47,7 +47,7 @@ export interface ResponderOptions {
  * Start a scripted responder. Returns the live {@link RineAgent} handle — call
  * `.stop()` (or `await using`) to drain + close the SSE loop on teardown.
  *
- * I-1: the SSE loop is opened here (when explicitly started), never at import.
+ * The SSE loop is opened here, when explicitly started, and never at import.
  */
 export function startResponder(opts: ResponderOptions): RineAgent {
 	const log = opts.logger ?? console;
@@ -59,7 +59,7 @@ export function startResponder(opts: ResponderOptions): RineAgent {
 			msg: DecryptedMessage,
 			ctx: AgentMessageContext,
 		): Promise<void> => {
-			// I-2: read plaintext only; a message we can't read can't be acked sanely.
+			// Read plaintext only; a message we can't read can't be acked sanely.
 			if (msg.decrypt_error) {
 				log.warn?.(`[responder] decrypt failed for ${msg.id}; skipping`);
 				return;

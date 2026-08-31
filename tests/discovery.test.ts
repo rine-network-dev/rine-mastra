@@ -1,14 +1,18 @@
 /**
- * The 2 discovery tools, through their public Mastra `execute` interface against
- * the real SDK + a mock directory boundary. Covers AC-1 (happy strings vs
- * observable HTTP, the dropped tag/jurisdiction/pricingModel fields) and AC-2
- * (error paths resolve).
+ * The discovery tools, through their public Mastra `execute` interface against
+ * the real SDK + a mock directory boundary. Covers the happy strings against
+ * the observable HTTP (incl. the dropped tag/jurisdiction/pricingModel fields)
+ * and the error paths, which resolve a readable string rather than reject.
+ *
+ * `rine_discover_groups` is registered in this domain but implemented with the
+ * other group readers, so its tests live in `groups-list.test.ts`.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
 	createRineDiscoverTool,
 	createRineInspectTool,
+	createRineWhoamiTool,
 } from "../src/discovery.js";
 import { API_URL, type Harness, makeHarness, runTool } from "./harness.js";
 
@@ -24,7 +28,7 @@ afterEach(() => {
 const A1 = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const A2 = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 
-describe("rine_discover (AC-1, AC-2)", () => {
+describe("rine_discover", () => {
 	it("returns a numbered list and only sends the supported filter fields", async () => {
 		let queryUrl = "";
 		h.route("GET", /^\/directory\/agents$/, (req) => {
@@ -60,7 +64,7 @@ describe("rine_discover (AC-1, AC-2)", () => {
 
 		expect(out).toContain("1. alice@acme [verified]");
 		expect(out).toContain("2. bob@acme (research)");
-		// AC-1: the supported filters are on the wire.
+		// The supported filters are on the wire.
 		expect(queryUrl).toContain("q=helper");
 		expect(queryUrl).toContain("category=research");
 		expect(queryUrl).toContain("verified=true");
@@ -82,7 +86,7 @@ describe("rine_discover (AC-1, AC-2)", () => {
 		expect(out).toBe("No agents matched.");
 	});
 
-	it("AC-2: a 422 resolves to the invalid-input string", async () => {
+	it("a 422 resolves to the invalid-input string", async () => {
 		h.route("GET", /^\/directory\/agents$/, () => ({
 			status: 422,
 			json: { detail: "bad filter" },
@@ -96,7 +100,7 @@ describe("rine_discover (AC-1, AC-2)", () => {
 	});
 });
 
-describe("rine_inspect (AC-1, AC-2)", () => {
+describe("rine_inspect", () => {
 	it("returns the full profile render for a UUID (no WebFinger round-trip)", async () => {
 		h.route("GET", new RegExp(`^/directory/agents/${A1}$`), () => ({
 			json: {
@@ -121,7 +125,7 @@ describe("rine_inspect (AC-1, AC-2)", () => {
 		expect(out).toContain("description: a research agent");
 	});
 
-	it("AC-2: a 404 resolves to the not-found + discover hint", async () => {
+	it("a 404 resolves to the not-found + discover hint", async () => {
 		h.route("GET", new RegExp(`^/directory/agents/${A1}$`), () => ({
 			status: 404,
 			json: { detail: "unknown agent" },
@@ -133,5 +137,53 @@ describe("rine_inspect (AC-1, AC-2)", () => {
 		const out = await runTool(tool, { handleOrId: A1 }, h);
 		expect(out).toContain("Not found: unknown agent");
 		expect(out).toContain("Try rine_discover");
+	});
+});
+
+describe("rine_whoami", () => {
+	it("renders the org, tier and live handles, dropping revoked agents", async () => {
+		h.route("GET", /^\/agents$/, () => ({
+			json: {
+				items: [
+					{
+						id: A1,
+						name: "support",
+						handle: "support@acme",
+						created_at: "2026-06-01T00:00:00.000Z",
+					},
+					{
+						id: A2,
+						name: "retired",
+						handle: "retired@acme",
+						created_at: "2026-06-01T00:00:00.000Z",
+						revoked_at: "2026-07-01T00:00:00.000Z",
+					},
+				],
+				total: 2,
+				next_cursor: null,
+				prev_cursor: null,
+			},
+		}));
+		h.route("GET", /^\/org$/, () => ({
+			json: {
+				id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+				name: "Acme",
+				slug: "acme",
+				trust_tier: 2,
+				created_at: "2026-06-01T00:00:00.000Z",
+			},
+		}));
+
+		const tool = createRineWhoamiTool({
+			configDir: h.configDir,
+			apiUrl: API_URL,
+		});
+		const out = await runTool(tool, {}, h);
+
+		expect(out).toContain("Org Acme (acme)");
+		expect(out).toContain("trust tier: 2");
+		expect(out).toContain("support@acme");
+		// A revoked agent is a handle nothing can be sent from or to.
+		expect(out).not.toContain("retired@acme");
 	});
 });

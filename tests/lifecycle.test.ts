@@ -3,10 +3,10 @@
  * callbacks a host app spreads into `agent.stream/.generate` against the real SDK
  * + real crypto + a mock HTTP boundary.
  *
- * Covers: AC-13 (a fired event attempts EXACTLY ONE best-effort `client.send`,
- * asserted via wire-body decrypt — real HPKE), AC-14 (a send failure is swallowed
- * and never propagates out of the callback), I-1 (no client until a callback
- * fires), and the selector→callback map (finish/error/step).
+ * Covers: a fired event attempts EXACTLY ONE best-effort `client.send` (asserted
+ * via wire-body decrypt — real HPKE); a send failure is swallowed and never
+ * propagates out of the callback; laziness (no client until a callback fires);
+ * and the selector→callback map (finish/error/step).
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -61,7 +61,7 @@ function bridgeOpts(on?: Parameters<typeof rineLifecycle>[0]["on"]) {
  * The lifecycle callbacks are fire-and-forget (`void notify(...)`), so the send
  * settles AFTER the synchronous callback returns. Poll the recorded requests for
  * the `POST /messages` the notify makes, up to a short deadline, then return its
- * envelope body. Fails loudly if no (or more than one) POST landed (AC-13).
+ * envelope body. Fails loudly if no (or more than one) POST landed.
  */
 async function waitForSend(): Promise<{ encrypted_payload: string }> {
 	const deadline = Date.now() + 2000;
@@ -78,7 +78,7 @@ async function waitForSend(): Promise<{ encrypted_payload: string }> {
 	throw new Error("no POST /messages was made within the deadline");
 }
 
-describe("rineLifecycle — AC-13: exactly one best-effort send, wire-body decrypts", () => {
+describe("rineLifecycle — exactly one best-effort send, wire-body decrypts", () => {
 	it("onFinish fires ONE send carrying the summarized final text", async () => {
 		h.route("POST", /^\/messages$/, () => ({
 			json: sentAck(),
@@ -92,7 +92,7 @@ describe("rineLifecycle — AC-13: exactly one best-effort send, wire-body decry
 
 		cb.onFinish?.({ text: "all done", finishReason: "stop" });
 
-		// AC-13: exactly one POST, and decrypting it as the peer yields the summary.
+		// Exactly one POST, and decrypting it as the peer yields the summary.
 		const env = await waitForSend();
 		const plaintext = await h.peerDecrypt(env.encrypted_payload);
 		expect(JSON.parse(plaintext)).toEqual({ text: "agent finished: all done" });
@@ -145,7 +145,7 @@ describe("rineLifecycle — AC-13: exactly one best-effort send, wire-body decry
 	});
 });
 
-describe("rineLifecycle — AC-14: a send failure is swallowed, never propagates", () => {
+describe("rineLifecycle — a send failure is swallowed, never propagates", () => {
 	it("a 500 from the wire does not throw out of the callback", async () => {
 		h.route("POST", /^\/messages$/, () => ({
 			status: 500,
@@ -157,7 +157,7 @@ describe("rineLifecycle — AC-14: a send failure is swallowed, never propagates
 		// The callback returns void synchronously; the inner notify must not reject.
 		expect(() => cb.onFinish?.({ text: "done" })).not.toThrow();
 
-		// AC-14: the failure is swallowed + debug-logged (async), never thrown.
+		// The failure is swallowed + debug-logged (async), never thrown.
 		const deadline = Date.now() + 2000;
 		while (debug.mock.calls.length === 0 && Date.now() < deadline) {
 			await new Promise((r) => setTimeout(r, 5));
@@ -168,7 +168,7 @@ describe("rineLifecycle — AC-14: a send failure is swallowed, never propagates
 	});
 });
 
-describe("rineLifecycle — I-1 lazy client + opt-in default", () => {
+describe("rineLifecycle — lazy client + opt-in default", () => {
 	it("constructs no client and makes no request until a callback fires", () => {
 		const before = h.requests.length;
 		rineLifecycle(bridgeOpts(["finish", "error"]));

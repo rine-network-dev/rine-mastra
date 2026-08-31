@@ -1,5 +1,5 @@
 /**
- * Shared workflow + Mastra-instance factory for the AC-12 cross-process test
+ * Shared workflow + Mastra-instance factory for the cross-process resume test
  * (adapted from `_probe/p10_shared.ts`). Both the suspend child and the resume
  * driver import this so they build an IDENTICAL workflow/Mastra wired to the
  * SAME libsql snapshot file (shared storage).
@@ -7,8 +7,8 @@
  * The pre-suspend body APPENDS to a side-channel marker file so the test can
  * prove, from a fresh process, that the send/suspend body did NOT re-run on
  * resume (the run CONTINUES from the suspended step, it does not restart). It
- * also records the `resumeData` it received so the test can assert I-2 (only
- * plaintext / verified / from — never ciphertext).
+ * also records the `resumeData` it received so the test can assert it carried
+ * only plaintext / verified / from — never ciphertext.
  */
 
 import { appendFileSync, writeFileSync } from "node:fs";
@@ -20,7 +20,7 @@ import { z } from "zod";
 /** The step a `RineThreadResumer` resumes — its id is the suspended step path. */
 export const WAIT_STEP_ID = "wait-for-rine-reply";
 
-/** The resumeData shape the resumer builds (I-2: plaintext + signature facts). */
+/** The resumeData shape the resumer builds: plaintext + signature facts only. */
 const resumeSchema = z.object({
 	plaintext: z.string(),
 	verified: z.boolean(),
@@ -42,7 +42,8 @@ function buildStep(firstPassMarker: string, resumeMarker: string) {
 				appendFileSync(firstPassMarker, "first-pass\n");
 				return await suspend({ conversationId: "conv-ac12", to: inputData.to });
 			}
-			// Resumed: capture exactly what resumeData carried (for the I-2 assertion).
+			// Resumed: capture exactly what resumeData carried, for the
+			// ciphertext-absent assertion.
 			writeFileSync(resumeMarker, JSON.stringify(resumeData));
 			return { replyText: resumeData.plaintext, from: resumeData.from };
 		},

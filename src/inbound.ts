@@ -10,13 +10,21 @@
  *      `createRun({runId})` would otherwise read an empty in-process run-map);
  *      a non-suspended / unknown run ⇒ skip, do NOT ack;
  *   3. build `resumeData` from `plaintext` / `verified` / `from` ONLY
- *      (I-2: JSON-serializable, never ciphertext or an SDK client) — a
+ *      (JSON-serializable, never ciphertext or an SDK client) — a
  *      decrypt-failed message ⇒ skip, do NOT ack;
  *   4. `createRun({runId}).resume({ step, resumeData })` to continue the run.
  *
  * **Lossless-by-default:** every skip path leaves the message in
  * the rine inbox (no `markDelivered`), so a later poll can retry after the run is
  * mapped / key recovery succeeds. The resumer NEVER acks.
+ *
+ * TRUST NOTE: `verified === true` on an inbound message means the envelope
+ * signature checked out AND the signing key it names belongs to the agent the
+ * server authenticated as the sender, so the `from` handed to the resumed step is
+ * the signer of that content. The signature covers the payload only — not this
+ * recipient, and no nonce — so an agent re-sending content it signed earlier
+ * produces a copy that verifies as its own. A workflow that must act on a payload
+ * once keys its own idempotency on `messageId`.
  */
 
 import { unwrapText } from "./format.js";
@@ -51,13 +59,13 @@ export interface ResumableRun {
 }
 
 /**
- * The JSON-serializable payload handed to the suspended step on resume. I-2:
+ * The JSON-serializable payload handed to the suspended step on resume:
  * plaintext + signature facts ONLY — no ciphertext, no envelope, no SDK client.
  */
 export interface ResumeData {
 	/** Unwrapped decrypted body (or a decrypt-error marker), never ciphertext. */
 	plaintext: string;
-	/** Whether the inbound message's signature verified. */
+	/** Whether the signature verified as the server-authenticated sender's. */
 	verified: boolean;
 	/** Sender handle (or agent UUID fallback), for the resumed step's context. */
 	from: string;
@@ -130,7 +138,7 @@ export class RineThreadResumer {
 			return { resumed: false, reason: "no-conversation" };
 		}
 
-		// I-2 + lossless: a message we can't decrypt cannot produce a safe
+		// Lossless: a message we can't decrypt cannot produce a safe
 		// resumeData — leave it in the inbox for a retry after key recovery.
 		if (msg.decrypt_error) {
 			this.log.debug?.(
@@ -157,7 +165,7 @@ export class RineThreadResumer {
 			return { resumed: false, reason: "not-suspended" };
 		}
 
-		// I-2: resumeData is plaintext + signature facts ONLY — JSON-serializable,
+		// resumeData is plaintext + signature facts ONLY — JSON-serializable,
 		// never the ciphertext envelope or an SDK client.
 		const resumeData: ResumeData = {
 			plaintext: unwrapText(msg.plaintext),
@@ -166,8 +174,8 @@ export class RineThreadResumer {
 			messageId: msg.id,
 		};
 
-		// Isolate a throwing resumed step / transient storage error (I-3, matching
-		// the langchain precedent): a raise here must NOT propagate — it would
+		// Isolate a throwing resumed step / transient storage error, the way the
+		// langchain adapter does: a raise here must NOT propagate — it would
 		// crash the poll-loop's per-message dispatch or reject into the webhook
 		// caller's HTTP route. Skip losslessly (no ack), leaving the message in the
 		// inbox for a later retry.

@@ -1,11 +1,11 @@
 /**
  * Tier-3 true idle-wake (the differentiator).
  *
- * AC-12 (BLOCKING, the headline): suspend a Mastra workflow in ONE process,
+ * The headline behaviour (BLOCKING): suspend a Mastra workflow in ONE process,
  * resume it in a FRESH child process through the production `RineThreadResumer`
  * + `SqliteThreadMap` (same libsql files), and assert the run CONTINUES from the
  * suspended step (the pre-suspend body did NOT re-run) and that `resumeData`
- * carried ONLY plaintext (I-2 — no ciphertext).
+ * carried ONLY plaintext — no ciphertext.
  *
  * Plus unit coverage: `SqliteThreadMap` round-trip, and `handleInbound`
  * skip-paths (no-map / not-suspended / decrypt-failed → no ack, lossless).
@@ -51,7 +51,7 @@ function firstPassLines(marker: string): number {
 	return readFileSync(marker, "utf-8").trim().split("\n").length;
 }
 
-describe("AC-12 — cross-process suspend→resume CONTINUES (the headline)", () => {
+describe("cross-process suspend→resume CONTINUES (the headline)", () => {
 	let dir: string;
 	let snapshotUrl: string;
 	let threadMapUrl: string;
@@ -122,7 +122,7 @@ describe("AC-12 — cross-process suspend→resume CONTINUES (the headline)", ()
 		// (the marker still holds exactly one line).
 		expect(firstPassLines(firstPassMarker)).toBe(1);
 
-		// I-2: resumeData carried ONLY plaintext + signature facts; the ciphertext
+		// resumeData carried ONLY plaintext + signature facts; the ciphertext
 		// sentinel never reached the resumed step.
 		expect(existsSync(resumeMarker)).toBe(true);
 		const resumeData = JSON.parse(readFileSync(resumeMarker, "utf-8"));
@@ -327,7 +327,8 @@ describe("RineThreadResumer.handleInbound — skip paths never ack (lossless)", 
 
 	it("resume that throws → failed skip, lossless (no ack, no crash)", async () => {
 		// A transient storage error or a throwing resumed step must NOT propagate
-		// (I-3) — it degrades to a lossless skip so the message stays in the inbox.
+		// out of the dispatch — it degrades to a lossless skip so the message
+		// stays in the inbox.
 		const map = new InMemoryThreadMap();
 		await map.set("bob@acme", "c1", "run-x");
 		const resume = vi.fn(async () => {
@@ -365,7 +366,7 @@ describe("RineThreadResumer.handleInbound — skip paths never ack (lossless)", 
 		expect(f.resume).not.toHaveBeenCalled();
 	});
 
-	it("suspended run mapped → resumes with plaintext-only resumeData (I-2)", async () => {
+	it("suspended run mapped → resumes with plaintext-only resumeData", async () => {
 		const f = fakeWorkflow("suspended");
 		const map = new InMemoryThreadMap();
 		await map.set("bob@acme", "c1", "run-x");
@@ -387,7 +388,7 @@ describe("RineThreadResumer.handleInbound — skip paths never ack (lossless)", 
 			from: "bob@acme",
 			messageId: "m1",
 		});
-		// I-2: the carried ciphertext sentinel never enters resumeData.
+		// The carried ciphertext sentinel never enters resumeData.
 		expect(JSON.stringify(resumeData)).not.toContain(SENTINEL);
 	});
 });

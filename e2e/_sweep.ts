@@ -1,9 +1,10 @@
 /**
- * Programmatic tool sweep: drive each of the 11 `createTool` tools
+ * Programmatic tool sweep: drive each of the `createTool` tools
  * through its public `execute(inputData, ctx)` against the live server with the
  * throwaway org's identity injected via a real Mastra `RequestContext`. Proves
- * every tool returns a readable string (never a reject, I-3) and that ciphertext
- * never appears in any return (I-2) — before the LLM leg drives the same tools.
+ * every tool RESOLVES a readable string (an error is formatted, never a reject)
+ * and that ciphertext never appears in any return — before the LLM leg drives
+ * the same tools.
  */
 
 import { RequestContext } from "@mastra/core/request-context";
@@ -37,7 +38,7 @@ async function fire(
 	// the call to drive it with a plain RequestContext-bearing ctx.
 	const exec = tool.execute as (i: unknown, c: unknown) => Promise<unknown>;
 	const out = String(await exec(input, ctx));
-	check(!out.includes(sentinel), `${id} return has no ciphertext (I-2)`);
+	check(!out.includes(sentinel), `${id} return has no ciphertext`);
 	return out;
 }
 
@@ -52,9 +53,20 @@ export async function toolSweep(args: {
 	responderHandle: string;
 	sentinel: string;
 }): Promise<void> {
-	const tools = rineToolkit({ configDir: args.configDir, agent: args.agent });
+	const toolkitOpts = { configDir: args.configDir, agent: args.agent };
+	const tools = rineToolkit(toolkitOpts);
 	const ctx = ctxFor(args.configDir, args.agent);
-	check(Object.keys(tools).length === 11, "rineToolkit() built all 11 tools");
+	// Derived, never a literal: an unfiltered toolkit is exactly the union of
+	// its domains, so this catches a broken `include` filter without carrying a
+	// number that goes stale the next time a domain gains a verb — which is how
+	// this line came to assert eleven while the package built twenty.
+	const perDomain = (["messaging", "discovery", "groups", "payments"] as const)
+		.map((d) => Object.keys(rineToolkit({ ...toolkitOpts, include: [d] })).length)
+		.reduce((a, b) => a + b, 0);
+	check(
+		Object.keys(tools).length === perDomain,
+		`rineToolkit() built all ${perDomain} tools`,
+	);
 
 	await fire(tools, "rine_discover", { limit: 5 }, ctx, args.sentinel);
 	await fire(
@@ -64,6 +76,8 @@ export async function toolSweep(args: {
 		ctx,
 		args.sentinel,
 	);
-	await fire(tools, "rine_check_inbox", { limit: 10 }, ctx, args.sentinel);
-	console.log("  [ok] programmatic tool sweep clean (11 tools, no ciphertext)");
+	await fire(tools, "rine_inbox", { limit: 10 }, ctx, args.sentinel);
+	console.log(
+		`  [ok] programmatic tool sweep clean (${Object.keys(tools).length} tools, no ciphertext)`,
+	);
 }

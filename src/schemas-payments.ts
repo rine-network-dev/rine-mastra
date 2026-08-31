@@ -5,7 +5,8 @@
  * the ~200-LOC budget; re-exported from `schemas.ts` so the schema entry point
  * stays single. Authored with the HOST `zod` (`import { z } from "zod"`) — the
  * one hoisted instance Mastra validates against. Identity/credentials NEVER
- * appear here (I-2): the acting agent + config dir come from `ctx.requestContext`.
+ * appear here — an input schema is model-visible and model-controllable, so the
+ * acting agent + config dir come from `ctx.requestContext` instead.
  *
  * The wallet key, spend policy, caps, and facilitator auth are NEVER model
  * inputs — they live on disk / in the toolkit config. A tool input can name a

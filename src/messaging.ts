@@ -1,16 +1,18 @@
 /**
- * The 5 messaging tools: `rine_send`, `rine_send_and_wait`, `rine_check_inbox`,
- * `rine_read`, `rine_reply`. Each is a thin
+ * The 6 messaging tools: `rine_send`, `rine_send_and_wait`, `rine_inbox`,
+ * `rine_read`, `rine_thread`, `rine_reply`. Each is a thin
  * `createTool` adapter: one `AsyncRineClient` call rendered to a string, wrapped
  * by `makeExecute` (lazy client + formatError). Identity comes from
  * `ctx.requestContext`, never the model-visible `inputSchema`.
  *
- * I-2 holds throughout: renderers read only plaintext/decrypt_error/verification
- * (`format.ts`), never the ciphertext envelope. `rine_check_inbox` is the
- * Track-0 poll+ack receive primitive (Tier-1).
+ * Ciphertext never reaches the model through any of them: renderers read only
+ * plaintext/decrypt_error/verification (`format.ts`), never the ciphertext
+ * envelope. `rine_inbox` on its default
+ * `new` status is the Track-0 poll+ack receive primitive (Tier-1).
  */
 
 import { createTool } from "@mastra/core/tools";
+import { THREAD_REF_SURFACES, resolveThreadRef } from "@rine-network/core";
 import { asMessageUuid } from "@rine-network/sdk";
 import { strResult, type z } from "./_zod.js";
 import { GROUP_ON_WAIT_MESSAGE, isGroupUnsupportedOnWait } from "./errors.js";
@@ -22,7 +24,8 @@ import {
 	verifiedNote,
 } from "./format.js";
 import {
-	checkInboxInput,
+	THREAD_REF_RULE,
+	inboxInput,
 	readInput,
 	replyInput,
 	sendAndWaitInput,
@@ -36,12 +39,12 @@ import {
 	redactToText,
 } from "./tool.js";
 
-/** `rine_send` — send a 1:1 or `#`-group message (the SDK auto-routes groups). */
+/** `rine_send` — send a 1:1 or group message (the SDK auto-routes groups). */
 export function createRineSendTool(opts: RineToolOpts = {}) {
 	return createTool({
 		id: "rine_send",
 		description:
-			"Start a NEW conversation: send an end-to-end-encrypted message to another agent (`name@org` / UUID) or, with a `#`-prefixed handle, to a whole group over its E2EE channel. Use this to open a fresh thread, NOT to answer an inbound message — to continue an existing conversation use rine_reply (which keeps the same thread). This is a real, irreversible network action: the message is delivered to a live recipient. Returns the new message id and conversation id.",
+			"Start a NEW conversation: send an end-to-end-encrypted message to another agent (`kofi@acme.rine.network` / UUID) or to a whole group over its E2EE channel — name the group by its own name (`logistics`), or by its full handle (`#logistics@acme.rine.network`). Use this to open a fresh thread, NOT to answer an inbound message — to continue an existing conversation use rine_reply (which keeps the same thread). This is a real, irreversible network action: the message is delivered to a live recipient. Returns the new message id and conversation id.",
 		inputSchema: sendInput,
 		outputSchema: strResult,
 		mcp: { annotations: { destructiveHint: true } },
@@ -61,7 +64,7 @@ export function createRineSendAndWaitTool(opts: RineToolOpts = {}) {
 	return createTool({
 		id: "rine_send_and_wait",
 		description:
-			"Send an end-to-end-encrypted message to a single agent (`name@org` / UUID) and block up to `waitSeconds` for a reply, returning the decrypted reply if one arrives. 1:1 only — use rine_send for groups. This is a real, irreversible network action.",
+			"Send an end-to-end-encrypted message to a single agent (`kofi@acme.rine.network` / UUID) and block up to `waitSeconds` for a reply, returning the decrypted reply if one arrives. 1:1 only — use rine_send for groups. This is a real, irreversible network action.",
 		inputSchema: sendAndWaitInput,
 		outputSchema: strResult,
 		mcp: { annotations: { destructiveHint: true } },
@@ -90,26 +93,44 @@ export function createRineSendAndWaitTool(opts: RineToolOpts = {}) {
 }
 
 /**
- * `rine_check_inbox` — poll the newest new messages, decrypt them, then
- * best-effort `markDelivered` the decryptable ids so a later check returns only
- * newer mail (Track-0 poll+ack, Tier-1). On ack failure: warn + note the
- * messages "may reappear" but still return the reads (AC-5).
+ * `rine_inbox` — poll the inbox under one status filter, decrypt what it
+ * returns, and on the `new` path best-effort `markDelivered` the decryptable
+ * ids so a later check returns only newer mail (Track-0 poll+ack, Tier-1). On
+ * ack failure: warn + note the messages "may reappear" but still return the
+ * reads.
  */
-export function createRineCheckInboxTool(opts: RineToolOpts = {}) {
+export function createRineInboxTool(opts: RineToolOpts = {}) {
 	return createTool({
-		id: "rine_check_inbox",
+		id: "rine_inbox",
 		description:
-			"Fetch and decrypt your newest unread messages (1:1 and group), then mark them delivered so a later check returns only newer mail. Returns a numbered list of decrypted messages, or 'No new messages.'.",
-		inputSchema: checkInboxInput,
+			'Fetch and decrypt messages from your inbox (1:1 and group). Defaults to `status: "new"` — the mail this agent has not acknowledged yet — and marks what it returns delivered, so a later check returns only newer mail. `delivered`, `read` and `all` re-read mail that was already acknowledged and mark nothing. Returns a numbered list of decrypted messages, or \'No new messages.\' when nothing matched.',
+		inputSchema: inboxInput,
 		outputSchema: strResult,
-		// I-2 layer (c): belt-and-suspenders ciphertext redactor.
+		// Belt-and-suspenders ciphertext redactor: the last of the three
+		// defences keeping ciphertext out of the model's context.
 		toModelOutput: redactToText,
-		execute: makeExecute<z.infer<typeof checkInboxInput>>(
+		execute: makeExecute<z.infer<typeof inboxInput>>(
 			opts,
 			async (client, i) => {
-				const page = await client.inbox({ status: "new", limit: i.limit });
+				// The schema's default, restated for the path where a host calls
+				// `execute` with raw input Mastra never validated: without it a
+				// missing `status` would silently turn the poll+ack primitive into
+				// an unfiltered read that acks nothing.
+				const status = i.status ?? "new";
+				// `all` is a tool-layer value: the server's filter is a three-value
+				// literal and "everything" is the ABSENCE of the parameter, so it is
+				// translated to an omitted `status` rather than forwarded.
+				const page = await client.inbox({
+					status: status === "all" ? undefined : status,
+					limit: i.limit,
+				});
 				const items = page.items;
 				const rendered = renderInbox(items);
+
+				// Ack on the `new` path only. Every other filter is a re-read of mail
+				// this agent has already acknowledged, so there is nothing to move —
+				// and acking there would consume messages the caller asked only to see.
+				if (status !== "new") return rendered;
 
 				// Ack only the messages we could actually decrypt; a broken envelope
 				// stays "new" so a future poll can retry after key recovery.
@@ -137,7 +158,8 @@ export function createRineReadTool(opts: RineToolOpts = {}) {
 			"Fetch and decrypt a single message by its UUID. Returns the sender, type, decrypted body, and signature status.",
 		inputSchema: readInput,
 		outputSchema: strResult,
-		// I-2 layer (c): belt-and-suspenders ciphertext redactor.
+		// Belt-and-suspenders ciphertext redactor: the last of the three
+		// defences keeping ciphertext out of the model's context.
 		toModelOutput: redactToText,
 		execute: makeExecute<z.infer<typeof readInput>>(opts, async (client, i) => {
 			const msg = await client.read(asMessageUuid(i.messageId));
@@ -146,18 +168,29 @@ export function createRineReadTool(opts: RineToolOpts = {}) {
 	});
 }
 
-/** `rine_thread` — fetch the both-sided, decrypted transcript of a conversation. */
+/** `rine_thread` — fetch the both-sided, decrypted transcript of a conversation or a group. */
 export function createRineThreadTool(opts: RineToolOpts = {}) {
 	return createTool({
 		id: "rine_thread",
-		description:
-			"Fetch the both-sided, decrypted transcript of a conversation by its UUID. Returns every turn (yours and the peer's) ordered oldest→newest, each role-tagged (`[sent] you:` / `[received] handle:`). A turn you cannot decrypt renders `[unavailable]`. Use to recover the full context of a conversation on demand.",
+		description: `Fetch the both-sided, decrypted transcript of a conversation or a group. ${THREAD_REF_RULE} Returns every turn ordered oldest→newest, each role-tagged (\`[sent] you:\` / \`[received] handle:\`). A turn you cannot decrypt renders \`[unavailable]\`, except one sealed under a sender key this agent does not hold, which says so on the first such turn and marks the rest. A group's transcript starts where the reading agent was seated. Use to recover the full context of a conversation or a group on demand.`,
 		inputSchema: threadInput,
 		outputSchema: strResult,
-		// I-2 layer (c): belt-and-suspenders ciphertext redactor.
+		// Belt-and-suspenders ciphertext redactor: the last of the three
+		// defences keeping ciphertext out of the model's context.
 		toModelOutput: redactToText,
 		execute: makeExecute<z.infer<typeof threadInput>>(opts, async (client, i) => {
-			const entries = await client.thread(i.conversationId, { limit: i.limit });
+			// Decided here rather than left to the SDK: `client.thread`'s two call
+			// shapes cannot carry both references at once, so a call naming both
+			// would silently read one of them. The rule, the refusal and the
+			// spellings are all `rine-core`'s.
+			const ref = resolveThreadRef(
+				{ group: i.group ?? null, conversationId: i.conversationId ?? null },
+				THREAD_REF_SURFACES.sdk,
+			);
+			const entries =
+				ref.kind === "group"
+					? await client.thread({ group: ref.ref, limit: i.limit })
+					: await client.thread(ref.conversationId, { limit: i.limit });
 			return renderThread(entries);
 		}),
 	});

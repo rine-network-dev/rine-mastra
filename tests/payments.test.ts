@@ -131,7 +131,7 @@ async function routeIncoming(
  * the only thing the payee can reopen to recover its authored `accepts[]`.
  */
 async function routeOwnQuote(): Promise<void> {
-  const env = await h.selfEncrypt(paymentRequired());
+  const env = await h.ownEncrypt(paymentRequired());
   h.route("GET", new RegExp(`^/messages/${QUOTE_ID}$`), () => ({
     json: {
       id: QUOTE_ID,
@@ -309,7 +309,7 @@ describe("rine_pay (payer typed statuses)", () => {
     expect(readDailySpent(h.configDir, SELF_AGENT_ID)).toBe(200000n);
   });
 
-  it("D2: payments.autoPay config defaults the tool to threshold-gated auto-pay", async () => {
+  it("payments.autoPay config defaults the tool to threshold-gated auto-pay", async () => {
     createWallet(h.configDir, SELF_AGENT_ID);
     savePolicy(h.configDir, SELF_AGENT_ID, {
       ...HAPPY_POLICY,

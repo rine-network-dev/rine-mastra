@@ -12,10 +12,29 @@
  *      and exits non-zero on a parse error.
  */
 
+import * as fs from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+	generateAgentKeys,
+	saveAgentKeys,
+	verificationWordsForKey,
+} from "@rine-network/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const register = vi.fn();
 const createAgent = vi.fn();
+
+/**
+ * The words this surface prints are recomputed from the signing key in
+ * the config dir, never echoed off the agent record. The fixture therefore
+ * writes REAL keys and derives the expected string from them — a test that
+ * asserted the server's own string back would pass no matter what the surface
+ * did with it.
+ */
+const AGENT_ID = "11111111-2222-3333-4444-555555555555";
+let configDir: string;
+let ownWords: string;
 
 vi.mock("@rine-network/sdk", () => ({
 	register,
@@ -35,17 +54,24 @@ function makeIO() {
 }
 
 beforeEach(() => {
+	configDir = fs.mkdtempSync(join(tmpdir(), "rine-mastra-onboard-"));
+	const keys = generateAgentKeys();
+	saveAgentKeys(configDir, AGENT_ID, keys);
+	ownWords = verificationWordsForKey(keys.signing.publicKey);
+
 	register.mockReset();
 	createAgent.mockReset();
 	register.mockResolvedValue({ orgId: "org-1", clientId: "cid-1" });
 	createAgent.mockResolvedValue({
+		id: AGENT_ID,
 		handle: "support@acme.rine.network",
 		name: "Support",
-		verification_words: "tiger maple ridge",
+		verification_words: ownWords,
 	});
 });
 afterEach(() => {
 	vi.clearAllMocks();
+	fs.rmSync(configDir, { recursive: true, force: true });
 	process.exitCode = 0;
 });
 
@@ -175,7 +201,7 @@ describe("runOnboard — orchestration (PoW/register boundary mocked)", () => {
 				slug: "acme",
 				name: "Support",
 				apiUrl: "https://test.rine",
-				configDir: "/tmp/cfg",
+				configDir,
 			},
 			io,
 		);
@@ -190,7 +216,7 @@ describe("runOnboard — orchestration (PoW/register boundary mocked)", () => {
 			slug: "acme",
 			name: "Support",
 			apiUrl: "https://test.rine",
-			configDir: "/tmp/cfg",
+			configDir,
 		});
 		expect(typeof regArg.onProgress).toBe("function");
 
@@ -201,7 +227,7 @@ describe("runOnboard — orchestration (PoW/register boundary mocked)", () => {
 		// The handle + verification words reached stdout.
 		const out = lines.join("\n");
 		expect(out).toContain("Agent ready: support@acme.rine.network");
-		expect(out).toContain("Verification words: tiger maple ridge");
+		expect(out).toContain(`Verification words: ${ownWords}`);
 	});
 
 	it("derives a handle-safe agent name from a free-form display name (regression)", async () => {
@@ -211,7 +237,7 @@ describe("runOnboard — orchestration (PoW/register boundary mocked)", () => {
 				email: "a@b.co",
 				slug: "my-org",
 				name: "My Org",
-				configDir: "/tmp/cfg",
+				configDir,
 			},
 			io,
 		);
@@ -230,7 +256,7 @@ describe("runOnboard — orchestration (PoW/register boundary mocked)", () => {
 				slug: "acme",
 				name: "Acme Inc",
 				agentName: "coordinator",
-				configDir: "/tmp/cfg",
+				configDir,
 			},
 			io,
 		);
@@ -248,7 +274,7 @@ describe("runOnboard — orchestration (PoW/register boundary mocked)", () => {
 		);
 		const { io, lines } = makeIO();
 		await runOnboard(
-			{ email: "a@b.co", slug: "acme", name: "Support", configDir: "/tmp/cfg" },
+			{ email: "a@b.co", slug: "acme", name: "Support", configDir },
 			io,
 		);
 		const out = lines.join("\n");
@@ -257,18 +283,58 @@ describe("runOnboard — orchestration (PoW/register boundary mocked)", () => {
 		expect(out).toContain("proof-of-work 100%");
 	});
 
-	it("omits the verification-words line when the server returns none", async () => {
+	it("still prints its own words when the server names none", async () => {
 		createAgent.mockResolvedValue({
+			id: AGENT_ID,
 			handle: "support@acme.rine.network",
 			name: "Support",
 			verification_words: null,
 		});
 		const { io, lines } = makeIO();
 		await runOnboard(
-			{ email: "a@b.co", slug: "acme", name: "Support", configDir: "/tmp/cfg" },
+			{ email: "a@b.co", slug: "acme", name: "Support", configDir },
 			io,
 		);
-		expect(lines.join("\n")).not.toContain("Verification words:");
+		const out = lines.join("\n");
+		expect(out).toContain(`Verification words: ${ownWords}`);
+		expect(out).toContain("nothing to compare");
+	});
+
+	it("renders BOTH values when the server asserts different words", async () => {
+		createAgent.mockResolvedValue({
+			id: AGENT_ID,
+			handle: "support@acme.rine.network",
+			name: "Support",
+			verification_words: "abandon ability able about above",
+		});
+		const { io, lines } = makeIO();
+		await runOnboard(
+			{ email: "a@b.co", slug: "acme", name: "Support", configDir },
+			io,
+		);
+		const out = lines.join("\n");
+		expect(out).toContain(`Verification words (this client): ${ownWords}`);
+		expect(out).toContain("abandon ability able about above");
+		expect(out).toContain("Messages still send and arrive");
+	});
+
+	it("says so rather than echoing the server's string when it holds no key", async () => {
+		createAgent.mockResolvedValue({
+			id: "99999999-9999-9999-9999-999999999999",
+			handle: "support@acme.rine.network",
+			name: "Support",
+			verification_words: "abandon ability able about above",
+		});
+		const { io, lines } = makeIO();
+		await runOnboard(
+			{ email: "a@b.co", slug: "acme", name: "Support", configDir },
+			io,
+		);
+		const out = lines.join("\n");
+		expect(out).toContain(
+			"Verification words (server): abandon ability able about above",
+		);
+		expect(out).toContain("Not recomputed here");
 	});
 });
 
@@ -285,7 +351,7 @@ describe("main — subcommand routing + exit codes", () => {
 				"--name",
 				"Support",
 				"--config-dir",
-				"/tmp/cfg",
+				configDir,
 			],
 			io,
 		);

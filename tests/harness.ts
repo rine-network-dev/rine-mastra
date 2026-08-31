@@ -14,12 +14,12 @@
  *     it (built via the package's own `getRineClient`, so the client-cache /
  *     config-resolution path under test is exercised).
  *   - `selfEncrypt(payload)` → a GENUINE HPKE envelope the self-agent can
- *     decrypt, so I-2 / plaintext assertions exercise real crypto, not a stub.
+ *     decrypt, so plaintext assertions exercise real crypto, not a stub.
  *   - `route(method, pathRe, handler)` to register endpoint responses, and a
- *     `requests` log to assert the observable HTTP boundary (AC-1).
+ *     `requests` log to assert the observable HTTP boundary.
  *
  * Usage by later stages: register the routes a tool hits (e.g. `POST /messages`
- * for send, `GET /agents` + `GET /agents/{id}/messages` for check_inbox), drive
+ * for send, `GET /agents` + `GET /agents/{id}/messages` for inbox), drive
  * the tool's `execute(input, ctx)` with `ctx` from `makeCtx(h)`, and assert on
  * the returned string + `h.requests`.
  */
@@ -49,7 +49,7 @@ import {
 	type RineToolContext,
 } from "../src/context.js";
 
-/** A sentinel ciphertext string seeded into envelopes for I-2 absence checks. */
+/** A sentinel ciphertext string seeded into envelopes for plaintext-absence checks. */
 export const SENTINEL_CIPHERTEXT = "SENTINEL_CIPHERTEXT_DO_NOT_LEAK_0xDEADBEEF";
 
 export const SELF_AGENT_NAME = "support";
@@ -80,6 +80,30 @@ interface Route {
 	handler: RouteHandler;
 }
 
+/**
+ * The server's own `?handle=` filter, applied to EVERY `GET /groups` answer.
+ *
+ * 🔴 Central on purpose. The full-handle rung now lives on the server's own
+ * `GET /groups?handle=` lookup, so a route that answers every query with the
+ * same page hands the resolver the first row whatever was asked:
+ * `resolveRef("#nope@acme...")` then resolves to somebody else's group and the
+ * test passes on a group it never named. Filtering here — rather than in each
+ * route — is the same argument as the statusless `GET /groups/{uuid}` default
+ * below: no individual test can forget it.
+ */
+function applyHandleFilter(
+	req: RecordedRequest,
+	out: { status?: number; json?: unknown },
+) {
+	const wanted = new URL(req.url).searchParams.get("handle");
+	const json = out.json as { items?: unknown[] } | undefined;
+	if (wanted === null || !Array.isArray(json?.items)) return out;
+	const items = json.items.filter(
+		(g) => (g as { handle?: string }).handle === wanted,
+	);
+	return { ...out, json: { ...json, items, total: items.length } };
+}
+
 export interface Harness {
 	configDir: string;
 	selfKeys: AgentKeys;
@@ -95,20 +119,43 @@ export interface Harness {
 		sender_signing_kid: string | null;
 	}>;
 	/**
+	 * Produce a real HPKE envelope the self-agent both SIGNED and can decrypt —
+	 * the self-sealed copy of one of its own sends (e.g. a quote it issued). A row
+	 * the server reports as coming from the self-agent must carry this, not a
+	 * peer-signed envelope.
+	 */
+	ownEncrypt(payload: unknown): Promise<{
+		encrypted_payload: string;
+		encryption_version: string;
+		sender_signing_kid: string | null;
+	}>;
+	/**
 	 * Decrypt an OUTBOUND envelope (self → peer) as the peer would. Proves a
-	 * lifecycle/send notify actually carried the expected plaintext over the wire
-	 * (AC-13) — real HPKE open, not a stub. Returns the decrypted plaintext string.
+	 * lifecycle/send notify actually carried the expected plaintext over the wire —
+	 * real HPKE open, not a stub. Returns the decrypted plaintext string,
+	 * and THROWS when the decrypt refuses to hand over content because the envelope
+	 * was not signed by the sender it is bound to: a refusal is a real outcome the
+	 * harness names, never an empty body a test could assert against.
 	 */
 	peerDecrypt(encryptedPayloadB64: string): Promise<string>;
 	cleanup(): void;
 }
 
-/** The agent-list entry `GET /agents` returns (drives `resolveSenderId`). */
+/**
+ * The agent-list entry `GET /agents` returns (drives `resolveSenderId`, and
+ * `client.agentHandles()`).
+ *
+ * `created_at` is here because the SERVER sends it and `AgentReadSchema`
+ * requires it. Without it this fixture parsed as a rejection, and the one
+ * caller that goes through the schema degraded to UUIDs while every assertion
+ * in this package still read green.
+ */
 function agentRead(id: string, name: string, keys: AgentKeys) {
 	return {
 		id,
 		name,
 		handle: `${name}@acme.rine.network`,
+		created_at: "2026-01-01T00:00:00.000Z",
 		signing_public_key: signingPublicKeyToJWK(keys.signing.publicKey),
 		encryption_public_key: {
 			kty: "OKP",
@@ -187,6 +234,24 @@ export function makeHarness(): Harness {
 		pathRe: new RegExp(`^/agents/${PEER_AGENT_ID}/keys$`),
 		handler: () => ({ json: keysResponse(PEER_AGENT_ID, peerKeys) }),
 	});
+	// 🔴 A UUID-addressed group verb reads the group's OWN row first, and no test
+	// here used to answer that route. An unanswered route was worse
+	// than a gap: `readableGroupById` is entitled to swallow a 404 or a 403 —
+	// that is how "an id you may not read" is refused — so a test that forgot
+	// the route silently became a test of the refusal path, and the verb it was
+	// written for never ran. A statusless throw escapes every arm and names
+	// itself. Registered as a DEFAULT so no file can forget it, and overridable
+	// like any route (newest wins), which is how a refusal test says 404 or 403
+	// on this route and means it.
+	routes.push({
+		method: "GET",
+		pathRe: /^\/groups\/[0-9a-fA-F-]{36}$/,
+		handler: (req) => {
+			throw new Error(
+				`harness: no GET ${req.path} route. A UUID-addressed group verb reads the group's own row; register it with routeGroupRow(h, row).`,
+			);
+		},
+	});
 
 	const mockFetch = vi.fn(
 		async (input: string | URL | Request, init?: RequestInit) => {
@@ -209,7 +274,11 @@ export function makeHarness(): Harness {
 				const r = routes[i];
 				if (!r) continue;
 				if (r.method === method && r.pathRe.test(u.pathname)) {
-					const out = await r.handler(recorded);
+					const raw = await r.handler(recorded);
+					const out =
+						method === "GET" && u.pathname === "/groups"
+							? applyHandleFilter(recorded, raw)
+							: raw;
 					return jsonResponse(out.status ?? 200, out.json ?? {});
 				}
 			}
@@ -240,7 +309,7 @@ export function makeHarness(): Harness {
 		},
 		async selfEncrypt(payload) {
 			// REAL HPKE seal: peer signs, self decrypts. The resulting envelope is
-			// genuinely openable by the self-agent in `read`/`check_inbox` tests.
+			// genuinely openable by the self-agent in `read`/`inbox` tests.
 			const enc = await encryptMessage(
 				configDir,
 				PEER_AGENT_ID,
@@ -253,9 +322,25 @@ export function makeHarness(): Harness {
 				sender_signing_kid: enc.sender_signing_kid ?? null,
 			};
 		},
+		async ownEncrypt(payload) {
+			// REAL HPKE seal: self signs, self decrypts — the shape of a self-sealed
+			// copy of the self-agent's own send.
+			const enc = await encryptMessage(
+				configDir,
+				SELF_AGENT_ID,
+				selfKeys.encryption.publicKey,
+				payload,
+			);
+			return {
+				encrypted_payload: enc.encrypted_payload,
+				encryption_version: enc.encryption_version,
+				sender_signing_kid: enc.sender_signing_kid ?? null,
+			};
+		},
 		async peerDecrypt(encryptedPayloadB64) {
 			// Open as the peer (the lifecycle recipient). The core HttpClient points
-			// at the mock fetch's /agents/{id}/keys route for sender verification.
+			// at the mock fetch's /agents/{id}/keys route for sender verification,
+			// and the self-agent is the sender the server would name on the row.
 			const http = new HttpClient({
 				apiUrl: API_URL,
 				tokenFn: async () => "test-token",
@@ -266,7 +351,13 @@ export function makeHarness(): Harness {
 				PEER_AGENT_ID,
 				encryptedPayloadB64,
 				http,
+				SELF_AGENT_ID,
 			);
+			if (res.plaintext === undefined) {
+				throw new Error(
+					`peerDecrypt refused the envelope (${res.verificationStatus}): it was not signed by ${SELF_AGENT_ID}, the sender it is bound to`,
+				);
+			}
 			return res.plaintext;
 		},
 		cleanup() {
@@ -275,6 +366,23 @@ export function makeHarness(): Harness {
 			rmSync(configDir, { recursive: true, force: true });
 		},
 	};
+}
+
+/**
+ * Answer `GET /groups/{id}` with `row` — the read every UUID-addressed group
+ * verb makes before it acts.
+ *
+ * The row is the test's own fixture and it is answered whole, because the
+ * resolve parses it against `GroupReadSchema` and the verbs downstream read
+ * `mls_enabled`/`mls_group_id` off it. A test that wants the route REFUSED
+ * registers its own handler instead — this helper exists for the ordinary case,
+ * not to make refusals harder to write.
+ */
+export function routeGroupRow(
+	h: Harness,
+	row: { id: string } & Record<string, unknown>,
+): void {
+	h.route("GET", new RegExp(`^/groups/${row.id}$`), () => ({ json: row }));
 }
 
 /**
@@ -306,14 +414,20 @@ interface ExecutableTool<I> {
  * the rendered string. Centralizes the `execute?` optionality + the structural
  * ctx widening in ONE documented place — no per-call casts. Asserts a string
  * came back (every rine tool resolves a string).
+ *
+ * `ctx` defaults to {@link makeCtx}, which names an acting agent. A test about
+ * what happens when *nobody* names one passes its own — that ctx cannot be built
+ * from the harness, and building it inline would re-introduce the cast this
+ * helper exists to hold.
  */
 export async function runTool<I>(
 	tool: ExecutableTool<I>,
 	input: I,
 	h: Harness,
+	ctx: RineToolContext = makeCtx(h),
 ): Promise<string> {
 	if (!tool.execute) throw new Error("tool has no execute");
-	const out = await tool.execute(input, makeCtx(h));
+	const out = await tool.execute(input, ctx);
 	return out as string;
 }
 

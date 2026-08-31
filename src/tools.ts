@@ -5,12 +5,13 @@
  * (`toolName === id`). Drop the record straight into a Mastra `Agent`'s
  * `tools: {}` map.
  *
- * `include` curates the surface: `"all"` (16), one domain
+ * `include` curates the surface: `"all"` (25), one domain
  * (`"messaging"`/`"discovery"`/`"groups"`/`"payments"`), or an array union of
  * domains. The `"payments"` domain (`rine_pay`, `rine_fulfill`) moves funds —
- * bounded by the on-disk spend policy (deny-by-default) and D2 auto-pay OFF.
+ * bounded by the on-disk spend policy (deny-by-default) and by auto-pay, OFF
+ * unless the toolkit turns it on.
  *
- * AC-11 shared client: ONE lazily-built `AsyncRineClient` is created per
+ * Shared client: ONE lazily-built `AsyncRineClient` is created per
  * `rineToolkit(...)` call and threaded into every tool's `opts.client`, so all
  * tools share a client (and the warm OAuth token cache). Per-acting-agent
  * variants derive cheaply via `client.withAgent(...)` inside each `execute`.
@@ -21,7 +22,23 @@
 
 import type { Tool } from "@mastra/core/tools";
 import { getRineClient } from "./client.js";
-import { createRineDiscoverTool, createRineInspectTool } from "./discovery.js";
+import {
+	createRineDiscoverTool,
+	createRineInspectTool,
+	createRineWhoamiTool,
+} from "./discovery.js";
+import {
+	createRineGroupLeaveTool,
+	createRineGroupReclaimTool,
+	createRineGroupRequestsTool,
+	createRineGroupSyncTool,
+	createRineGroupVoteTool,
+} from "./groups-admin.js";
+import {
+	createRineDiscoverGroupsTool,
+	createRineGroupRosterTool,
+	createRineGroupsTool,
+} from "./groups-list.js";
 import {
 	createRineGroupCreateTool,
 	createRineGroupInspectTool,
@@ -31,7 +48,7 @@ import {
 	createRineGroupRemoveTool,
 } from "./groups.js";
 import {
-	createRineCheckInboxTool,
+	createRineInboxTool,
 	createRineReadTool,
 	createRineReplyTool,
 	createRineSendAndWaitTool,
@@ -52,19 +69,31 @@ const DOMAINS: Record<
 	messaging: [
 		createRineSendTool,
 		createRineSendAndWaitTool,
-		createRineCheckInboxTool,
+		createRineInboxTool,
 		createRineReadTool,
 		createRineReplyTool,
 		createRineThreadTool,
 	],
-	discovery: [createRineDiscoverTool, createRineInspectTool],
+	discovery: [
+		createRineDiscoverTool,
+		createRineInspectTool,
+		createRineDiscoverGroupsTool,
+		createRineWhoamiTool,
+	],
 	groups: [
+		createRineGroupsTool,
 		createRineGroupCreateTool,
 		createRineGroupInviteTool,
 		createRineGroupRemoveTool,
 		createRineGroupInspectTool,
+		createRineGroupRosterTool,
 		createRineGroupJoinTool,
 		createRineGroupInvitesTool,
+		createRineGroupRequestsTool,
+		createRineGroupVoteTool,
+		createRineGroupLeaveTool,
+		createRineGroupSyncTool,
+		createRineGroupReclaimTool,
 	],
 	payments: [createRinePayTool, createRineFulfillTool],
 };
@@ -82,7 +111,7 @@ const ALL_DOMAINS: readonly RineToolDomain[] = [
  * OFF, marker ON) and a facilitator is only needed to `rine_fulfill`.
  */
 export interface RinePaymentsConfig {
-	/** D2 auto-pay default (default OFF). See {@link RinePaymentToolOpts.autoPay}. */
+	/** Auto-pay default (default OFF). See {@link RinePaymentToolOpts.autoPay}. */
 	autoPay?: RinePaymentToolOpts["autoPay"];
 	/** Facilitator for `rine_fulfill`. See {@link RinePaymentToolOpts.facilitator}. */
 	facilitator?: RinePaymentToolOpts["facilitator"];
@@ -121,8 +150,8 @@ function resolveDomains(
 export function rineToolkit(
 	opts: RineToolkitOptions = {},
 ): Record<string, Tool> {
-	// ONE shared lazy client per toolkit call (AC-11). `getRineClient` does NOT
-	// connect at construction (I-1) — the socket-less client is built here so
+	// ONE shared lazy client per toolkit call. `getRineClient` does NOT
+	// connect at construction — the socket-less client is built here so
 	// every tool reuses it and the token cache stays warm.
 	const sharedClient = getRineClient({
 		configDir: opts.configDir,

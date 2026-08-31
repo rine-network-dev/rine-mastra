@@ -11,7 +11,7 @@
  * (client builder, error formatter, renderers, schemas) is exported now so
  * tests and downstream stages can consume it.
  *
- * Import is side-effect-free (I-1): nothing here constructs a client, reads a
+ * Import is side-effect-free: nothing here constructs a client, reads a
  * credential, or opens a socket at module load.
  */
 
@@ -21,16 +21,25 @@ export type { RineClientOpts } from "./client.js";
 export { formatError } from "./errors.js";
 export type { RinePaymentToolOpts, RineToolOpts } from "./tool.js";
 
-// The 16 tool factories
+// The 25 tool factories
 export {
-	createRineCheckInboxTool,
+	createRineInboxTool,
 	createRineReadTool,
 	createRineReplyTool,
 	createRineSendAndWaitTool,
 	createRineSendTool,
 	createRineThreadTool,
 } from "./messaging.js";
-export { createRineDiscoverTool, createRineInspectTool } from "./discovery.js";
+export {
+	createRineDiscoverTool,
+	createRineInspectTool,
+	createRineWhoamiTool,
+} from "./discovery.js";
+export {
+	createRineDiscoverGroupsTool,
+	createRineGroupRosterTool,
+	createRineGroupsTool,
+} from "./groups-list.js";
 export {
 	createRineGroupCreateTool,
 	createRineGroupInspectTool,
@@ -39,6 +48,13 @@ export {
 	createRineGroupJoinTool,
 	createRineGroupRemoveTool,
 } from "./groups.js";
+export {
+	createRineGroupLeaveTool,
+	createRineGroupReclaimTool,
+	createRineGroupRequestsTool,
+	createRineGroupSyncTool,
+	createRineGroupVoteTool,
+} from "./groups-admin.js";
 export { createRineFulfillTool, createRinePayTool } from "./payments.js";
 
 // The toolkit aggregator

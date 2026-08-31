@@ -3,7 +3,7 @@
  * feeds inbound rine messages into a `RineThreadResumer`.
  *
  * Two things the gate must police but did not before:
- *   - I-1 at construction: building a `PollDriver` / a webhook handler must NOT
+ *   - Laziness at construction: building a `PollDriver` / a webhook handler must NOT
  *     build an `AsyncRineClient` or start an SSE loop (the client is lazy in
  *     `start()` / the factory builds nothing until called). We spy on
  *     `getRineClient` + `defineAgent` and assert zero calls pre-`start()`.
@@ -33,7 +33,7 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
-describe("PollDriver — I-1: builds nothing at construction", () => {
+describe("PollDriver — builds nothing at construction", () => {
 	it("constructing a PollDriver builds no client and no SSE loop", () => {
 		const clientSpy = vi.spyOn(clientModule, "getRineClient");
 		const agentSpy = vi.spyOn(sdk, "defineAgent");
@@ -47,14 +47,14 @@ describe("PollDriver — I-1: builds nothing at construction", () => {
 			logger: quietLogger,
 		});
 
-		// Lazy by construction (I-1): nothing networked, no actor defined.
+		// Lazy by construction: nothing networked, no actor defined.
 		expect(clientSpy).toHaveBeenCalledTimes(0);
 		expect(agentSpy).toHaveBeenCalledTimes(0);
 	});
 });
 
 describe("makeWebhookHandler", () => {
-	it("I-1: the factory builds nothing until the handler is called", () => {
+	it("the factory builds nothing until the handler is called", () => {
 		const clientSpy = vi.spyOn(clientModule, "getRineClient");
 		const agentSpy = vi.spyOn(sdk, "defineAgent");
 		const { resumer } = fakeResumer({ resumed: false, reason: "no-map" });

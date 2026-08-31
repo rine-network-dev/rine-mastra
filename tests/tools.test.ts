@@ -1,7 +1,7 @@
 /**
- * `rineToolkit` aggregator (AC-10 include filter, AC-11 shared client).
+ * `rineToolkit` aggregator: the include filter and the one shared client.
  *
- * The toolkit builds no socket (I-1 — `getRineClient` only stashes config), so
+ * The toolkit builds no socket — `getRineClient` only stashes config — so
  * these run without a mock fetch: they inspect the returned record's keys and
  * that all tools close over ONE shared client.
  */
@@ -14,18 +14,27 @@ import { rineToolkit } from "../src/tools.js";
 const ALL_IDS = [
 	"rine_send",
 	"rine_send_and_wait",
-	"rine_check_inbox",
+	"rine_inbox",
 	"rine_read",
 	"rine_reply",
 	"rine_thread",
 	"rine_discover",
 	"rine_inspect",
+	"rine_discover_groups",
+	"rine_whoami",
+	"rine_groups",
 	"rine_group_create",
 	"rine_group_invite",
 	"rine_group_remove",
 	"rine_group_inspect",
+	"rine_group_roster",
 	"rine_group_join",
 	"rine_group_invites",
+	"rine_group_requests",
+	"rine_group_vote",
+	"rine_group_leave",
+	"rine_group_sync",
+	"rine_group_reclaim",
 	"rine_pay",
 	"rine_fulfill",
 ].sort();
@@ -33,7 +42,7 @@ const ALL_IDS = [
 const MESSAGING_IDS = [
 	"rine_send",
 	"rine_send_and_wait",
-	"rine_check_inbox",
+	"rine_inbox",
 	"rine_read",
 	"rine_reply",
 	"rine_thread",
@@ -49,8 +58,8 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
-describe("rineToolkit — AC-10 include filter (keys === ids)", () => {
-	it("default returns all 16 tools, each keyed by its id", () => {
+describe("rineToolkit — include filter (keys === ids)", () => {
+	it("default returns all 25 tools, each keyed by its id", () => {
 		const kit = rineToolkit(OPTS);
 		expect(Object.keys(kit).sort()).toEqual(ALL_IDS);
 		// The KEY equals the tool's own id (toolName === id).
@@ -59,15 +68,20 @@ describe("rineToolkit — AC-10 include filter (keys === ids)", () => {
 		}
 	});
 
-	it("include:'messaging' returns exactly the 5 messaging tools", () => {
+	it("include:'messaging' returns exactly the 6 messaging tools", () => {
 		const kit = rineToolkit({ ...OPTS, include: "messaging" });
 		expect(Object.keys(kit).sort()).toEqual(MESSAGING_IDS);
 	});
 
-	it("include:'discovery' returns exactly the 2 discovery tools", () => {
+	it("include:'discovery' returns exactly the 4 discovery tools", () => {
 		const kit = rineToolkit({ ...OPTS, include: "discovery" });
 		expect(Object.keys(kit).sort()).toEqual(
-			["rine_discover", "rine_inspect"].sort(),
+			[
+				"rine_discover",
+				"rine_inspect",
+				"rine_discover_groups",
+				"rine_whoami",
+			].sort(),
 		);
 	});
 
@@ -84,16 +98,33 @@ describe("rineToolkit — AC-10 include filter (keys === ids)", () => {
 			[
 				"rine_discover",
 				"rine_inspect",
+				"rine_discover_groups",
+				"rine_whoami",
+				"rine_groups",
 				"rine_group_create",
 				"rine_group_invite",
 				"rine_group_remove",
 				"rine_group_inspect",
+				"rine_group_roster",
 				"rine_group_join",
 				"rine_group_invites",
+				"rine_group_requests",
+				"rine_group_vote",
+				"rine_group_leave",
+				"rine_group_sync",
+				"rine_group_reclaim",
 			].sort(),
 		);
 		// Messaging is excluded.
 		expect(kit.rine_send).toBeUndefined();
+	});
+
+	it("neither renamed tool survives under its old name", () => {
+		const kit = rineToolkit(OPTS);
+		expect(kit.rine_check_inbox).toBeUndefined();
+		expect(kit.rine_group_members).toBeUndefined();
+		expect(kit.rine_inbox).toBeDefined();
+		expect(kit.rine_group_roster).toBeDefined();
 	});
 
 	it("include:'all' is equivalent to the default", () => {
@@ -103,7 +134,7 @@ describe("rineToolkit — AC-10 include filter (keys === ids)", () => {
 	});
 });
 
-describe("rineToolkit — AC-11 one shared client per call", () => {
+describe("rineToolkit — one shared client per call", () => {
 	it("builds exactly ONE client for the whole toolkit", () => {
 		const spy = vi.spyOn(clientModule, "getRineClient");
 		rineToolkit(OPTS);

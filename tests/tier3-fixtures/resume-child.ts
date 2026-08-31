@@ -1,10 +1,11 @@
 /**
- * AC-12 process B (FRESH process, empty in-memory run-map): wake the suspended
- * run THROUGH the production `RineThreadResumer` + `SqliteThreadMap`, exactly as
- * a wake driver would. Proves cross-process continuation (#5521/#4630 defended)
- * AND that the resumer resolves `(handle, conversation) → runId` from the durable
- * store, rehydrates via `getWorkflowRunById` before resume, and builds resumeData
- * from plaintext only (I-2).
+ * Process B of the cross-process resume test (FRESH process, empty in-memory
+ * run-map): wake the suspended run THROUGH the production `RineThreadResumer`
+ * + `SqliteThreadMap`, exactly as a wake driver would. Proves cross-process
+ * continuation (#5521/#4630 defended) AND that the resumer resolves
+ * `(handle, conversation) → runId` from the durable store, rehydrates via
+ * `getWorkflowRunById` before resume, and builds resumeData from plaintext
+ * only — never ciphertext, never an SDK client.
  *
  * Args: <snapshotDbUrl> <threadMapUrl> <firstPassMarker> <resumeMarker> <handle> <conversation> <sentinelCiphertext>
  * Prints `OUTCOME::<json>`.
@@ -50,7 +51,7 @@ const resumer = new RineThreadResumer({
 });
 
 // A synthetic inbound message as a wake driver would hand it over. It carries a
-// SENTINEL ciphertext envelope field that must NEVER reach resumeData (I-2); the
+// SENTINEL ciphertext envelope field that must NEVER reach resumeData; the
 // resumer reads only plaintext/verified/sender_handle/conversation_id.
 const inbound = {
 	id: "msg-ac12-0001",

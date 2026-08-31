@@ -1,16 +1,18 @@
 /**
  * Shared `createTool` plumbing every rine tool reuses (no duplicated logic):
- * identity injection (I-1 lazy client + I-2 no-creds-in-schema) and the
- * try/catch → `formatError` wrapper (I-3 errors→strings, never a reject).
+ * identity injection (a lazily built client, and no credentials in any
+ * model-visible schema) and the try/catch → `formatError` wrapper that turns
+ * every error into a readable string instead of a rejected promise.
  *
  * A tool's per-tool body is just `(client, inputData) => string`; this helper
  * supplies the surrounding contract:
  *   1. read the acting agent + config-dir/api-url overrides from
  *      `ctx.requestContext` (NEVER `inputSchema`), falling back to the
  *      `rineToolkit(opts)` overrides closed over at factory time,
- *   2. lazily build/get the shared `AsyncRineClient` (I-1 — first call only),
+ *   2. lazily build/get the shared `AsyncRineClient` (first call only, so that
+ *      importing the package builds nothing),
  *   3. run the body, and on any thrown SDK error return `formatError(err)` so
- *      the tool RESOLVES a readable string and never rejects (I-3).
+ *      the tool RESOLVES a readable string and never rejects.
  *
  * `createTool` from `@mastra/core/tools` is invoked by each domain module; this
  * file only builds the `execute` closure and the shared option/ctx types.
@@ -38,11 +40,11 @@ import { formatError } from "./errors.js";
 /**
  * Per-factory overrides threaded from `rineToolkit(opts)` / an individual
  * `createRine<X>Tool(opts)` call. A live `client` may be passed so every tool in
- * one `rineToolkit(...)` call shares ONE lazily-built client (AC-11); when
+ * one `rineToolkit(...)` call shares ONE lazily-built client; when
  * omitted, each tool resolves its own client lazily on first `execute`.
  */
 export interface RineToolOpts extends RineClientOpts {
-	/** A shared client to reuse (set by `rineToolkit` for AC-11). */
+	/** A shared client to reuse, set by `rineToolkit` so all its tools share one. */
 	client?: AsyncRineClient;
 }
 
@@ -55,7 +57,7 @@ export interface RineToolOpts extends RineClientOpts {
  */
 export interface RinePaymentToolOpts extends RineToolOpts {
 	/**
-	 * D2 auto-pay default (default OFF). When true, `rine_pay` defaults to paying
+	 * Auto-pay default (default OFF). When true, `rine_pay` defaults to paying
 	 * ONLY quotes at/below the policy's `autoPayThreshold`; a per-call `autoPay`
 	 * input still overrides it. Caps + deny-by-default + reserve-lock bound it
 	 * regardless.
@@ -75,7 +77,7 @@ export interface RinePaymentToolOpts extends RineToolOpts {
  * Resolve the effective `AsyncRineClient` for one `execute` call: prefer a
  * shared client from the toolkit, else build one from the ctx-injected identity
  * layered over the factory defaults. Lazy by construction — only runs inside
- * `execute` (I-1).
+ * `execute`, never at import or in a factory body.
  */
 export function resolveClient(
 	opts: RineToolOpts,
@@ -107,7 +109,7 @@ export function resolveApiUrlFor(
 
 /**
  * The recipient union `client.send`/`sendAndWait` accept. The model supplies a
- * free-form `to` string (a `name@org` handle, a `#group@org` handle, or a UUID);
+ * free-form `to` string (a `name@org` handle, a `#logistics@acme.rine.network` handle, or a UUID);
  * the SDK normalizes + validates it at runtime, so this brands the string once,
  * in one documented place, rather than scattering casts.
  */
@@ -119,9 +121,10 @@ export function asRecipient(to: string): Recipient {
 }
 
 /**
- * I-2 layer (c): the belt-and-suspenders ciphertext redactor for `read` /
- * `check_inbox`. Layers (a) plaintext-only renderers and
- * (b) `outputSchema: z.string()` already guarantee the `execute` return is a
+ * The third and last defence against ciphertext reaching the model: a
+ * belt-and-suspenders redactor for `read` / `inbox` / `thread`. The first two —
+ * plaintext-only renderers, and `outputSchema: z.string()` so no structured
+ * field can carry an envelope — already guarantee the `execute` return is a
  * redacted string; this coerces ANY value to plain text content before it can
  * reach the model, so even a regression that returned a richer object containing
  * ciphertext could not surface it. Returns Mastra's default text-content shape.

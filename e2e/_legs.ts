@@ -3,8 +3,9 @@
  * orchestrator (`e2e_live_agent.ts`) sequences. Every leg talks to a REAL rine
  * server through the SDK; the crypto (HPKE / MLS / PQ-hybrid) is the SDK's.
  *
- * I-2: every leg reads `msg.plaintext` only and asserts the ciphertext sentinel
- * never appears in a rendered/round-tripped value.
+ * Ciphertext must never reach the model: every leg reads `msg.plaintext` only
+ * and asserts the ciphertext sentinel never appears in a rendered or
+ * round-tripped value.
  */
 
 import type {
@@ -14,8 +15,12 @@ import type {
 	DecryptedMessage,
 	GroupHandle,
 } from "@rine-network/sdk";
-import { asGroupUuid, asMessageUuid } from "@rine-network/sdk";
-import { groupIsMls } from "../src/format.js";
+// 🔴 `groupIsMls` comes from the SDK, NOT from `../src/format.js`. That module
+// imports the predicate and uses it; it has never re-exported it. This lane read
+// it from there for a month without anyone noticing, because `tsconfig.json`'s
+// `include` is `["src", "tests"]` — `e2e/` is typechecked by nothing, so the
+// publish gate's `tsc --noEmit` is green while the lane cannot even load.
+import { asGroupUuid, asMessageUuid, groupIsMls } from "@rine-network/sdk";
 
 /** A tiny assert that names the failing leg. */
 export function check(cond: boolean, label: string): void {
@@ -75,7 +80,7 @@ async function awaitGroupReply(
 }
 
 /**
- * PQ-hybrid 1:1 round-trip (AC-8). Two SDK-created agents both carry an ML-KEM
+ * PQ-hybrid 1:1 round-trip. Two SDK-created agents both carry an ML-KEM
  * key, so a 1:1 send negotiates `hpke-hybrid-v1`; assert the nonce round-trips as
  * plaintext and the wire version is the PQ-hybrid one.
  */
@@ -98,11 +103,11 @@ export async function legPq1to1(
 	check(!!reply, "PQ-1:1 reply received");
 	const text = JSON.stringify(reply?.plaintext ?? "");
 	check(text.includes(nonce), "PQ-1:1 nonce round-tripped as plaintext");
-	check(!text.includes(sentinel), "PQ-1:1 ciphertext sentinel absent (I-2)");
+	check(!text.includes(sentinel), "PQ-1:1 ciphertext sentinel absent");
 }
 
 /**
- * MLS-group post + read round-trip (AC-6/AC-7). Create an MLS group (default
+ * MLS-group post + read round-trip. Create an MLS group (default
  * `enableMls:true`), invite the responder, post into it, and read the responder's
  * reply back from the group conversation.
  */
@@ -121,11 +126,11 @@ export async function legMlsGroup(
 		enrollment: "closed",
 		visibility: "private",
 	});
-	// `mls_group_id` latches asynchronously (null at create-return); the server
-	// defaults new groups to `mls_enabled=true` and the SDK runs a client-side
-	// MLS init during create. `groupIsMls` is the package's own capability check;
-	// the *real* MLS proof is the `mls-v1` wire version on the send below.
-	check(groupIsMls(group), "MLS group latched (mls_enabled)");
+	// The server mints the create response before the client-side MLS init runs,
+	// so `mls_group_id` is null in it; the SDK re-reads the group once the init
+	// lands, and that latch is what `groupIsMls` reads. The *real* MLS proof is
+	// the `mls-v1` wire version on the send below.
+	check(groupIsMls(group), "MLS group latched (mls_group_id)");
 	await client.groups.invite(
 		asGroupUuid(group.id),
 		asAgent(responderAgentId),
@@ -150,7 +155,7 @@ export async function legMlsGroup(
 	check(!!reply, "MLS group reply received (responder posted into the group)");
 	const text = JSON.stringify(reply?.plaintext ?? "");
 	check(text.includes(nonce), "MLS group nonce round-tripped as plaintext");
-	check(!text.includes(sentinel), "MLS group ciphertext sentinel absent (I-2)");
+	check(!text.includes(sentinel), "MLS group ciphertext sentinel absent");
 }
 
 /** Read a message by id and assert no ciphertext leaks into the rendered text. */
@@ -161,5 +166,5 @@ export async function legReadNoLeak(
 ): Promise<void> {
 	const msg = await client.read(asMessageUuid(messageId));
 	const text = JSON.stringify(msg.plaintext ?? msg.decrypt_error ?? "");
-	check(!text.includes(sentinel), "rine_read renders no ciphertext (I-2)");
+	check(!text.includes(sentinel), "rine_read renders no ciphertext");
 }

@@ -1,5 +1,5 @@
 /**
- * I-1: side-effect-free import. Importing the package must NOT open a socket,
+ * Side-effect-free import. Importing the package must NOT open a socket,
  * read a credential, or construct an `AsyncRineClient` at module load.
  *
  * Two angles:
@@ -23,7 +23,7 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
-describe("I-1 — side-effect-free import (in-process)", () => {
+describe("side-effect-free import (in-process)", () => {
 	it("imports the package with zero fetch calls", async () => {
 		vi.resetModules();
 		const fetchSpy = vi.spyOn(globalThis, "fetch");
@@ -34,22 +34,22 @@ describe("I-1 — side-effect-free import (in-process)", () => {
 	});
 });
 
-describe("I-1 — side-effect-free import (subprocess, network shimmed to throw)", () => {
+describe("side-effect-free import (subprocess, network shimmed to throw)", () => {
 	it("a fresh process imports the package without networking", () => {
 		const script = `
 			import net from "node:net";
 			import fs from "node:fs";
-			const boom = () => { throw new Error("I-1 VIOLATION: network at import"); };
+			const boom = () => { throw new Error("IMPORT SIDE EFFECT: network at import"); };
 			globalThis.fetch = boom;
 			net.connect = boom;
 			net.createConnection = boom;
 			net.Socket.prototype.connect = boom;
-			// I-1 forbids a credential read / config-dir mkdir at import too, not
+			// A side-effect-free import forbids a credential read / config-dir mkdir too, not
 			// just networking. Trip on any fs access that smells like config/creds.
 			const fsBoom = (orig) => (p, ...rest) => {
 				const s = String(p);
 				if (/credentials\\.json|\\.rine|\\.config[\\\\/]+rine/.test(s)) {
-					throw new Error("I-1 VIOLATION: credential/config fs access at import: " + s);
+					throw new Error("IMPORT SIDE EFFECT: credential/config fs access at import: " + s);
 				}
 				return orig(p, ...rest);
 			};
@@ -67,7 +67,7 @@ describe("I-1 — side-effect-free import (subprocess, network shimmed to throw)
 			["--import", "tsx", "--input-type=module", "-e", script],
 			{ cwd: pkgRoot, encoding: "utf-8", timeout: 60_000 },
 		);
-		expect(res.stderr).not.toContain("I-1 VIOLATION");
+		expect(res.stderr).not.toContain("IMPORT SIDE EFFECT");
 		expect(res.stdout).toContain("IMPORT_OK");
 		expect(res.status).toBe(0);
 	});

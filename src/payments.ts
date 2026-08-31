@@ -2,7 +2,7 @@
  * The 2 x402 payment tools: `rine_pay` (payer) and `rine_fulfill` (payee). Each
  * is a thin `createTool` adapter over the ts-sdk `client.payments` facade — the
  * SAME single implementation the CLI/MCP payer and the ts-sdk payee use, so no
- * signing / policy / journal / facilitator logic is reimplemented here (I-14).
+ * signing / policy / journal / facilitator logic is reimplemented here.
  *
  * `rine_pay` consumes a received `rine.v1.x402_payment_required` and returns the
  * `rine_pay` 7-status vocabulary VERBATIM (parity with MCP `rine_pay` and the
@@ -102,14 +102,14 @@ function payStatusFromError(err: unknown): string | null {
 /**
  * `rine_pay` — pay a received x402 quote in-thread (payer). Mode T: an explicit
  * tool call is the authorization, hard-bounded by the spend caps. The toolkit's
- * `payments.autoPay` config (D2, default OFF) sets the default of the `autoPay`
+ * `payments.autoPay` config (default OFF) sets the default of the `autoPay`
  * input; when on, only quotes at/below the policy's `autoPayThreshold` are paid.
  */
 export function createRinePayTool(opts: RinePaymentToolOpts = {}) {
 	return createTool({
 		id: "rine_pay",
 		description:
-			"Pay a received x402 payment request (rine.v1.x402_payment_required) in-thread. Decrypts the quote, selects an acceptable requirement under the agent's local spend policy (deny-by-default), signs an EIP-3009 stablecoin authorization with the agent's wallet, and sends the signed rine.v1.x402_payment back in the same conversation. The spend is reserved under a cross-process lock as the last act before the send (fail-closed: the debit stands even if the send then fails, and there is no refund). Returns a typed `status:` line — `payment-submitted` on success, or `no-wallet` / `not-payment-required` / `policy-refused` / `above-auto-pay-threshold` / `already-paid` / `wallet-busy`. It does NOT wait for settlement: the receipt arrives later as an ordinary inbox message (read it with rine_read / rine_check_inbox / rine_thread).",
+			"Pay a received x402 payment request (rine.v1.x402_payment_required) in-thread. Decrypts the quote, selects an acceptable requirement under the agent's local spend policy (deny-by-default), signs an EIP-3009 stablecoin authorization with the agent's wallet, and sends the signed rine.v1.x402_payment back in the same conversation. The spend is reserved under a cross-process lock as the last act before the send (fail-closed: the debit stands even if the send then fails, and there is no refund). Returns a typed `status:` line — `payment-submitted` on success, or `no-wallet` / `not-payment-required` / `policy-refused` / `above-auto-pay-threshold` / `already-paid` / `wallet-busy`. It does NOT wait for settlement: the receipt arrives later as an ordinary inbox message (read it with rine_read / rine_inbox / rine_thread).",
 		inputSchema: payInput,
 		outputSchema: strResult,
 		mcp: { annotations: { destructiveHint: true } },

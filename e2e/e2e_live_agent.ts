@@ -1,24 +1,26 @@
 /**
  * Live-LLM end-to-end e2e. AUTHORED to RUN — it is NOT run
  * here (no creds / no LLM in this environment). It reads secrets by name from a
- * gitignored `.e2e.env` (see `_env.ts`) and is a runnable `tsx` script:
+ * gitignored repo-root `.env.e2e` (see `_env.ts`) and is a runnable `tsx` script:
  *
  *   tsx e2e/e2e_live_agent.ts
  *
  * Flow (each leg asserts; the whole run erases the throwaway org in `finally`):
  *   1. onboard a throwaway org via REAL RSA proof-of-work → first agent (driver);
  *   2. create a second agent (responder) + start the `defineAgent` responder;
- *   3. programmatic tool sweep (all 11 tools, no ciphertext leak);
+ *   3. programmatic tool sweep (every built tool, no ciphertext leak);
  *   4. a REAL Mastra `Agent` + REAL LLM drives discover → send_and_wait →
- *      check_inbox → reply, asserting a unique nonce round-trips encrypted;
- *   5. MLS-group post+read round-trip (AC-6/7) — MLS on by default;
- *   6. PQ-hybrid 1:1 round-trip (AC-8) — `hpke-hybrid-v1` on the wire;
+ *      inbox → reply, asserting a unique nonce round-trips encrypted;
+ *   5. MLS-group post+read round-trip — MLS on by default;
+ *   6. PQ-hybrid 1:1 round-trip — `hpke-hybrid-v1` on the wire;
  *   7. Tier-3 cross-process suspend/resume demo (a step suspends, an inbound
- *      reply wakes it via the resumer; the run CONTINUES, I-2 holds in resumeData);
+ *      reply wakes it via the resumer; the run CONTINUES, and `resumeData`
+ *      carries plaintext only);
  *   8. `eraseOrg({ confirm: true })`.
  *
- * I-2 runs through every leg: only `plaintext` is asserted; a ciphertext SENTINEL
- * must never appear in any tool return, rendered message, or resumeData.
+ * Every leg holds the same line: only `plaintext` is asserted, and a ciphertext
+ * SENTINEL must never appear in any tool return, rendered message, or
+ * resumeData.
  */
 
 import { mkdtempSync } from "node:fs";
@@ -42,11 +44,11 @@ import { startResponder } from "./responder.js";
 
 /** A unique value the driver expects to survive the encrypted round-trips. */
 const NONCE = `nonce-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-/** A marker no plaintext path may ever surface (the I-2 ciphertext sentinel). */
+/** A marker no plaintext path may ever surface: the ciphertext sentinel. */
 const SENTINEL = "CIPHERTEXT-SENTINEL-DO-NOT-LEAK";
 
 async function main(): Promise<void> {
-	// Reuses the crewai/langchain sibling `.e2e.env` contract (same secrets):
+	// Reuses the shared repo-root `.env.e2e` contract (same secrets):
 	//   RINE_API_URL · TOGETHER_API_KEY · RINE_E2E_MODEL · RINE_E2E_BASE_URL.
 	const apiUrl = envVar("RINE_API_URL") ?? "https://rine.network";
 	const model = envVar("RINE_E2E_MODEL") ?? "meta-llama/Llama-3.3-70B-Instruct-Turbo";
@@ -164,7 +166,7 @@ async function llmLeg(
 		`Message ${responderHandle} with "ping ${NONCE}" and wait for the reply.`,
 		{ maxSteps: 6, requestContext: rc },
 	);
-	check(!res.text.includes(SENTINEL), "LLM output has no ciphertext (I-2)");
+	check(!res.text.includes(SENTINEL), "LLM output has no ciphertext");
 	check(
 		res.text.includes(NONCE) || res.text.toLowerCase().includes("ack"),
 		"LLM reported the responder's ack (nonce round-tripped)",
@@ -194,7 +196,7 @@ async function tier3Leg(
 		sentinel: SENTINEL,
 	});
 	check(result.resumed, "Tier-3 run resumed (CONTINUES, not restarts)");
-	check(result.ciphertextAbsent, "Tier-3 resumeData has no ciphertext (I-2)");
+	check(result.ciphertextAbsent, "Tier-3 resumeData has no ciphertext");
 }
 
 main().catch((err) => {

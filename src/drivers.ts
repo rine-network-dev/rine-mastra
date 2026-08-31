@@ -13,7 +13,7 @@
  * poll loop **silently never fire** on Vercel/Netlify/Lambda/CF Workers (the
  * process dies between requests) — `@mastra/inngest` is required there.
  *
- * I-1: NO `AsyncRineClient` and NO SSE loop are built at construction. The
+ * NO `AsyncRineClient` and NO SSE loop are built at construction. The
  * `PollDriver` builds its client + `defineAgent` only on `start()`; the webhook
  * handler builds nothing until it is actually called.
  */
@@ -58,7 +58,7 @@ export class PollDriver {
 
 	/**
 	 * Start the SSE delivery loop. Lazily builds the `AsyncRineClient` + the
-	 * `defineAgent` actor (I-1 — nothing networked until now). Idempotent: a
+	 * `defineAgent` actor — nothing is networked until now. Idempotent: a
 	 * second call is a no-op while a loop is running.
 	 */
 	async start(): Promise<void> {
@@ -102,7 +102,8 @@ export interface WebhookHandlerOptions {
  * The opt-in webhook wake driver. Returns a `Callable` the user invokes from
  * their own HTTP route on a rine outbound webhook delivery; it dispatches the
  * decrypted message to {@link RineThreadResumer.handleInbound} and reports
- * whether a run was resumed. I-1: builds nothing until called.
+ * whether a run was resumed. It builds nothing — no client, no loop — until
+ * it is actually called.
  *
  * The caller is responsible for decrypting the webhook payload into a
  * `DecryptedMessage` (e.g. via the SDK) before invoking the handler — keeping

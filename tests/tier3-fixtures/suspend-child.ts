@@ -1,7 +1,8 @@
 /**
- * AC-12 process A (fresh child): run the delegate workflow to SUSPENSION against
- * a shared libsql snapshot file, then map `(handle, conversation) → runId` into a
- * durable `SqliteThreadMap` so a separate process can resolve + resume it.
+ * Process A of the cross-process resume test (fresh child): run the delegate
+ * workflow to SUSPENSION against a shared libsql snapshot file, then map
+ * `(handle, conversation) → runId` into a durable `SqliteThreadMap` so a
+ * separate process can resolve + resume it.
  *
  * Args: <snapshotDbUrl> <threadMapUrl> <firstPassMarker> <resumeMarker> <handle> <conversation>
  * Prints `RUNID::<runId>` on its own line for the parent to capture.

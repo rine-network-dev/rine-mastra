@@ -7,10 +7,12 @@
  * process / org — feeds a real inbound rine `DecryptedMessage` through the public
  * {@link RineThreadResumer} and asserts the run CONTINUES from the suspended step
  * (does not restart). This is the package's headline differentiator exercised
- * against the live primitives the same way AC-12 proves it in-process.
+ * against the live primitives the same way `tests/tier3.test.ts` proves it
+ * in-process.
  *
- * I-2: the resumer builds `resumeData` from plaintext only — this demo asserts
- * the sentinel is absent from the resumed step's captured data.
+ * The resumer builds `resumeData` from plaintext only — no ciphertext, no SDK
+ * client — and this demo asserts the sentinel is absent from the resumed step's
+ * captured data.
  */
 
 import { Mastra } from "@mastra/core/mastra";
@@ -32,7 +34,7 @@ export interface Tier3DemoResult {
 	runId?: string;
 	/** The plaintext the resumed step received (asserted to equal the nonce). */
 	resumedPlaintext?: string;
-	/** True if the I-2 sentinel was absent from the resumed step's data. */
+	/** True if the ciphertext sentinel was absent from the resumed step's data. */
 	ciphertextAbsent: boolean;
 }
 
@@ -100,7 +102,7 @@ export async function runTier3Demo(args: {
 	// pointed at the SAME libsql snapshot + the durable thread map. A real Mastra
 	// workflow satisfies `ResumableWorkflow` structurally; the cast narrows
 	// Mastra's stricter generic `resume` step-union to our minimal surface (same
-	// pattern as the AC-12 fixture).
+	// pattern as the in-process test fixture).
 	const resumer = new RineThreadResumer({
 		workflow: wf as unknown as ResumableWorkflow,
 		threadMap,

@@ -17,6 +17,7 @@ import type {
 	InviteResultSchema,
 	JoinRequestReadSchema,
 	MessageReadSchema,
+	VoteResponseSchema,
 } from "@rine-network/sdk";
 
 /** Project a Zod schema's output type without importing the SDK's `z` instance. */
@@ -29,3 +30,4 @@ export type InviteResult = Infer<typeof InviteResultSchema>;
 export type AgentSummary = Infer<typeof AgentSummarySchema>;
 export type AgentProfile = Infer<typeof AgentProfileSchema>;
 export type JoinRequestRead = Infer<typeof JoinRequestReadSchema>;
+export type VoteResponse = Infer<typeof VoteResponseSchema>;

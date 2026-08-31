@@ -6,7 +6,7 @@
  * NEVER a `createTool` — a ~30–60 s PoW does not belong in an LLM turn; it is an
  * out-of-band CLI a human runs once.
  *
- * I-1: no client is built at module load — `runOnboard` constructs the client
+ * No client is built at module load — `runOnboard` constructs the client
  * lazily, only when invoked. The PoW + credential write are delegated wholesale
  * to the SDK's `register(opts)` (over rine-core `performRegistration`); the agent
  * keypair is generated + persisted by `client.createAgent(name)`.
@@ -16,7 +16,12 @@
  * passed overrides (the SDK never resolves them itself).
  */
 
-import { resolveApiUrl, resolveConfigDir } from "@rine-network/core";
+import {
+	compareVerificationWordsForAgent,
+	resolveApiUrl,
+	resolveConfigDir,
+	verificationWordsLines,
+} from "@rine-network/core";
 import { AsyncRineClient, register } from "@rine-network/sdk";
 
 /** Options for {@link runOnboard}. */
@@ -102,8 +107,16 @@ export async function runOnboard(
 
 	io.log("");
 	io.log(`Agent ready: ${agent.handle}`);
-	if (agent.verification_words) {
-		io.log(`Verification words: ${agent.verification_words}`);
+	// Derived from the signing key just written to this config dir, never from
+	// the string the server returned with the agent.
+	for (const line of verificationWordsLines(
+		compareVerificationWordsForAgent(
+			configDir,
+			agent.id,
+			agent.verification_words,
+		),
+	)) {
+		io.log(line);
 	}
 	io.log(`Config dir: ${configDir}`);
 	io.log(

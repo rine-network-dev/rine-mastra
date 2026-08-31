@@ -23,7 +23,7 @@ import { rineToolkit } from "@rine-network/mastra";
 const actingAgent = process.env.RINE_ACTING_AGENT;
 
 /**
- * One agent, all 11 rine tools. `rineToolkit()` returns a keyed
+ * One agent, all 25 rine tools. `rineToolkit()` returns a keyed
  * `Record<string, Tool>` — spread straight into `tools`. The model picks the
  * tool by its `rine_*` id; identity (`agent`/`configDir`) is host-injected here,
  * never model-chosen.

@@ -5,7 +5,7 @@
  * No Mastra Agent, no LLM — the load-bearing wake is the SDK dispatch.
  *
  * Lives inside the package `e2e/` dir so Node resolves `@rine-network/sdk` from
- * `rine-mastra/node_modules` (no ad-hoc NODE_PATH needed — see REQ-FSH-10).
+ * `rine-mastra/node_modules` (no ad-hoc NODE_PATH needed).
  *
  *   RINE_CONFIG_DIR=/path/to/creds/leon RINE_E2E_MARKER=MASTRA-LIVE-xyz \
  *   RINE_E2E_HOOK=mast tsx rine-mastra/e2e/mastra_wake.ts

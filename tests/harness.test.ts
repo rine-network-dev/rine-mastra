@@ -3,12 +3,15 @@
  * a REAL HPKE envelope, produced by real rine-core crypto, round-trips back to
  * plaintext through the real SDK `client.read()` against the mock HTTP boundary.
  * If this passes, every later stage can trust `makeHarness()` exercises genuine
- * crypto (I-2 / plaintext assertions are real, not stubbed).
+ * crypto — the ciphertext-absent and plaintext assertions elsewhere are made
+ * against real envelopes, not stubs.
  */
 
+import { encryptMessage } from "@rine-network/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
 	type Harness,
+	PEER_AGENT_ID,
 	PEER_HANDLE,
 	SELF_AGENT_ID,
 	SENTINEL_CIPHERTEXT,
@@ -83,5 +86,22 @@ describe("harness", () => {
 
 		const paths = h.requests.map((r) => `${r.method} ${r.path}`);
 		expect(paths).toContain(`GET /messages/${messageId}`);
+	});
+
+	it("peerDecrypt refuses an envelope the bound sender did not sign", async () => {
+		// Sealed to the peer but SIGNED by the peer, while `peerDecrypt` binds the
+		// open to the self-agent as the sender — the re-sealed-message shape. The
+		// decrypt withholds the body, so the harness must say so rather than hand a
+		// test an empty plaintext.
+		const env = await encryptMessage(
+			h.configDir,
+			PEER_AGENT_ID,
+			h.peerKeys.encryption.publicKey,
+			{ text: "not signed by the self-agent" },
+		);
+
+		await expect(h.peerDecrypt(env.encrypted_payload)).rejects.toThrow(
+			/refused the envelope \(sender-mismatch\)/,
+		);
 	});
 });
