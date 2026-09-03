@@ -18,6 +18,7 @@ import {
 	SELF_AGENT_ID,
 	SELF_AGENT_NAME,
 	makeHarness,
+	routeNoGroupOfThatId,
 } from "./harness.js";
 
 let h: Harness;
@@ -41,6 +42,11 @@ function sentAck() {
 
 beforeEach(() => {
 	h = makeHarness();
+	// The lifecycle's best-effort send addresses `PEER_AGENT_ID`, an agent. Since
+	// A UUID recipient is probed against the group namespace first, so the
+	// fixture has to say this id names no group — otherwise the send never
+	// reaches `POST /messages` and the assertion reads as a lifecycle defect.
+	routeNoGroupOfThatId(h, PEER_AGENT_ID);
 });
 afterEach(() => {
 	h.cleanup();

@@ -27,6 +27,7 @@ import {
 	SENTINEL_CIPHERTEXT,
 	makeHarness,
 	routeGroupRow,
+	routeNoGroupOfThatId,
 	runTool,
 } from "./harness.js";
 
@@ -34,6 +35,11 @@ let h: Harness;
 
 beforeEach(() => {
 	h = makeHarness();
+	// `PEER_AGENT_ID` names an agent, and a UUID recipient is probed
+	// against the group namespace before the agent one. Saying so once here is
+	// the fixture's own truth; a test that means this id to BE a group
+	// overrides the route, newest wins.
+	routeNoGroupOfThatId(h, PEER_AGENT_ID);
 });
 afterEach(() => {
 	h.cleanup();

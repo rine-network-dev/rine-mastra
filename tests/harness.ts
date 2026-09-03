@@ -386,6 +386,27 @@ export function routeGroupRow(
 }
 
 /**
+ * Answer `GET /groups/{id}` with a 404 — this id names no group.
+ *
+ * The other half of {@link routeGroupRow}, and the answer production gives for
+ * an agent UUID. A UUID recipient is probed against the group
+ * namespace first, because `GET /groups/{id}` is org-scoped where
+ * `GET /agents/{id}/keys` is global — so asking the agent side first would
+ * prefer a stranger's namespace over the caller's own org's. The resolver
+ * swallows the 404 as a miss and falls through to the agent rung.
+ *
+ * A test that addresses an AGENT by id therefore needs this line, and says with
+ * it that the probe ran and found nothing — which the harness's statusless
+ * default deliberately will not say on a test's behalf.
+ */
+export function routeNoGroupOfThatId(h: Harness, id: string): void {
+	h.route("GET", new RegExp(`^/groups/${id}$`), () => ({
+		status: 404,
+		json: { detail: "Group not found" },
+	}));
+}
+
+/**
  * Build a Mastra-tool `ctx` carrying the harness identity in a real
  * `RequestContext`, exactly as a host app would inject it. Later stages drive a
  * tool via `tool.execute(input, makeCtx(h))`.
