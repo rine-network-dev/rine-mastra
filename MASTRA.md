@@ -259,7 +259,9 @@ the resumer, and a driver.
 
 ```ts
 import { LibSQLStore } from "@mastra/libsql";
-import { RineThreadResumer, SqliteThreadMap, PollDriver } from "@rine-network/mastra";
+import {
+  RineThreadResumer, SqliteThreadMap, SqliteSetAside, PollDriver,
+} from "@rine-network/mastra";
 
 // 1. Build your workflow against SHARED snapshot storage (so a fresh process can rehydrate it):
 const storage = new LibSQLStore({ url: "file:rine-workflows.db" });
@@ -269,8 +271,10 @@ const storage = new LibSQLStore({ url: "file:rine-workflows.db" });
 const threadMap = await SqliteThreadMap.open({ url: "file:rine-threadmap.db" });
 await threadMap.set("peer@other.rine.network", conversationId, runId); // BEFORE the run parks
 
-// 3. The resumer takes a pre-built workflow (snapshot storage already bound):
-const resumer = new RineThreadResumer({ workflow, threadMap, step });
+// 3. The resumer takes a pre-built workflow (snapshot storage already bound). The set-aside store
+//    holds the ids of messages it could not resume, so a restart still retries them:
+const setAside = await SqliteSetAside.open({ url: "file:rine-setaside.db" });
+const resumer = new RineThreadResumer({ workflow, threadMap, step, setAside });
 
 // 4. The default driver: a long-lived SDK SSE loop -> resumer.handleInbound(msg):
 const driver = new PollDriver({ resumer, agent: "worker", configDir: "/srv/rine/.rine" });
@@ -289,10 +293,28 @@ The pitfalls (rules):
   load-bearing recipe that defends mastra #5521 (an in-process run-map read) and #4630 (resume
   restarting from step 1). A resumed run **continues from its suspended step, it does not restart.**
 - **A step can suspend only once per execution.** Avoid parallel suspends in one superstep.
-- **Lossless-by-default.** Every skip path (no mapping, not suspended, decrypt-failed, no conversation,
-  resume threw) leaves the message in the rine inbox — the resumer NEVER acks. Run it ALONGSIDE normal
-  inbox handling (drain stragglers with `rine_inbox`); it is not a full inbox drain. The thread-map
-  is unbounded — prune completed `(handle, conversation)` entries with `threadMap.delete(...)`.
+- **A skip is recorded and retried.** Every skip path (no mapping, not suspended, decrypt-failed, no
+  conversation, resume threw) records the message's **id**, and a bounded retry re-reads that message
+  by id and re-attempts the resume: **5 attempts per message, 50 per sweep, one sweep every 5 minutes,
+  500 messages kept**. `PollDriver` runs the retry on that interval and at the tail of each message;
+  `makeWebhookHandler` runs it at the tail of each delivery. Nothing here acks, on any path.
+  The record is what makes a skip recoverable, and it is not optional bookkeeping: the server marks a
+  streamed frame delivered **as it yields it**, so a message this resumer skips has already left
+  `status:"new"`, `rine_inbox` and the SSE catch-up — a `GET` for its id is the only way to see it
+  again. The re-read peeks, so a row that is still `new` (the webhook case) is not consumed by its own
+  rescue, and a group message whose sender key arrived late gets a `groups.sync` before the re-read.
+- **Keep the parked ids across a restart.** The default store is per-process, so a restart forgets
+  what it parked — and the messages it forgets are already gone from the inbox. Pass
+  `setAside: await SqliteSetAside.open({ url: "file:rine-setaside.db" })`; it can share the libsql
+  database the thread map uses. After the fifth attempt a message is no longer retried automatically:
+  a warning names it, and it stays readable by id (`client.read(id)`).
+- **Two skips are recorded but never retried on a schedule.** A message whose signature did not
+  verify, and one with no conversation to key a thread by. Re-presenting attacker-controlled bytes on
+  a timer is a log amplifier whose cadence the attacker picks, and a re-read cannot give a message a
+  conversation it never had.
+- **Run it ALONGSIDE normal inbox handling** (drain stragglers with `rine_inbox`); it is not a full
+  inbox drain. The thread-map is unbounded — prune completed `(handle, conversation)` entries with
+  `threadMap.delete(...)`.
 - **Reply-timeout: bring your own deadline.** There is no scheduler. Track each parked run's deadline
   in your own state and resume it yourself when it fires; a run you never wake waits forever.
 - **Webhook alternative:** `makeWebhookHandler({ resumer })` returns a `Callable` you mount on your own

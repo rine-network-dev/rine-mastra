@@ -452,6 +452,40 @@ export async function runTool<I>(
 	return out as string;
 }
 
+/**
+ * One synthetic inbound `DecryptedMessage`, as the Tier-3 resumer sees it.
+ *
+ * Shared by every suite that drives `handleInbound` — the resumer's own, the
+ * set-aside store's and the retry sweep's — because three copies of this literal
+ * is three places a new required field has to be remembered. It carries
+ * {@link SENTINEL_CIPHERTEXT} as its `encrypted_payload` so any assertion about
+ * ciphertext absence has something real to look for.
+ *
+ * Cast rather than schema-parsed on purpose: these suites test the resumer's own
+ * branching, and parsing here would make a fixture that omits a field fail as a
+ * schema error instead of exercising the branch that reads it.
+ */
+export function makeInbound(
+	over: Record<string, unknown> = {},
+	// biome-ignore lint/suspicious/noExplicitAny: synthetic fixture, see above
+): any {
+	return {
+		id: "m1",
+		conversation_id: "c1",
+		sender_handle: "bob@acme",
+		from_agent_id: "33333333-3333-4333-8333-333333333333",
+		type: "rine.v1.text",
+		encrypted_payload: SENTINEL_CIPHERTEXT,
+		encryption_version: "hpke-v1",
+		metadata: {},
+		created_at: "2026-06-11T00:00:00Z",
+		plaintext: { text: "hi" },
+		verified: true,
+		verification_status: "verified",
+		...over,
+	};
+}
+
 function jsonResponse(status: number, json: unknown): Response {
 	// 204/205/304 forbid a body — the Response constructor throws if one is given
 	// (e.g. a `DELETE` returning 204 No Content).

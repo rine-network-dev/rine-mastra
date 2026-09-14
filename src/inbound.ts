@@ -4,19 +4,26 @@
  *
  * An inbound rine message wakes a SUSPENDED Mastra workflow run:
  *   1. resolve the message's `(handle, conversation_id)` → stored `runId` via the
- *      {@link ThreadMapStore} (no mapping ⇒ skip, do NOT ack — lossless);
+ *      {@link ThreadMapStore} (no mapping ⇒ set aside);
  *   2. **rehydrate the snapshot via `getWorkflowRunById(runId)` BEFORE resume**
  *      (the load-bearing recipe; defends mastra #5521 where
  *      `createRun({runId})` would otherwise read an empty in-process run-map);
- *      a non-suspended / unknown run ⇒ skip, do NOT ack;
+ *      a non-suspended / unknown run ⇒ set aside;
  *   3. build `resumeData` from `plaintext` / `verified` / `from` ONLY
  *      (JSON-serializable, never ciphertext or an SDK client) — a
- *      decrypt-failed message ⇒ skip, do NOT ack;
+ *      decrypt-failed message ⇒ set aside;
  *   4. `createRun({runId}).resume({ step, resumeData })` to continue the run.
  *
- * **Lossless-by-default:** every skip path leaves the message in
- * the rine inbox (no `markDelivered`), so a later poll can retry after the run is
- * mapped / key recovery succeeds. The resumer NEVER acks.
+ * 🔴 **Every skip records the message's id** in the {@link SetAsideStore}, and
+ * `setaside-sweep.ts` re-reads those ids and re-attempts them under a bound.
+ * That record is what makes a skip recoverable, because nothing else does: the
+ * default driver is the SSE loop named above, and the rine server marks a
+ * streamed frame delivered as it yields it — before any line of this file runs.
+ * A skipped message has therefore already left `status=new`, `poll()` and the
+ * SSE catch-up by the time it is skipped, so a `GET` for its id is the only way
+ * to see those bytes again. Nothing here acknowledges a message on any path,
+ * which on the webhook driver — where a row can still be `new` — is what also
+ * keeps a skipped message in the inbox listing.
  *
  * TRUST NOTE: `verified === true` on an inbound message means the envelope
  * signature checked out AND the signing key it names belongs to the agent the
@@ -28,50 +35,18 @@
  */
 
 import { unwrapText } from "./format.js";
+import { InMemorySetAside, sightingOf } from "./setaside.js";
+import type { ResumeSkipReason, SetAsideStore } from "./setaside.js";
 import type { ThreadMapStore } from "./threadmap.js";
 import type { DecryptedMessage } from "./types.js";
+import type { ResumableWorkflow, ResumeData } from "./workflow.js";
 
-/**
- * The minimal Mastra-workflow surface the resumer drives (the recipe). A
- * real `mastra.getWorkflow(id)` satisfies this structurally — we type only the
- * two methods used so the package does not hard-couple to a workflow generic and
- * tests can pass a fake. `step` is the suspended step (a `createStep` object or
- * its string id), per `Run.resume({ step, resumeData })`.
- */
-export interface ResumableWorkflow {
-	/** Rehydrate a suspended run's snapshot from shared storage (or `null`). */
-	getWorkflowRunById(runId: string): Promise<WorkflowSnapshot | null>;
-	/** Reattach to a run by id; `resume` then continues from its suspended step. */
-	createRun(opts: { runId: string }): Promise<ResumableRun>;
-}
-
-/** The rehydrated snapshot — only its suspended-status shape is read here. */
-export interface WorkflowSnapshot {
-	/** Run status; `"suspended"` means it is waiting on a resume. */
-	status?: string;
-	/** The suspended step path(s), when surfaced by the snapshot. */
-	suspended?: unknown;
-}
-
-/** A run reattached by id, ready to `resume`. */
-export interface ResumableRun {
-	resume(params: { step?: unknown; resumeData: ResumeData }): Promise<unknown>;
-}
-
-/**
- * The JSON-serializable payload handed to the suspended step on resume:
- * plaintext + signature facts ONLY — no ciphertext, no envelope, no SDK client.
- */
-export interface ResumeData {
-	/** Unwrapped decrypted body (or a decrypt-error marker), never ciphertext. */
-	plaintext: string;
-	/** Whether the signature verified as the server-authenticated sender's. */
-	verified: boolean;
-	/** Sender handle (or agent UUID fallback), for the resumed step's context. */
-	from: string;
-	/** The inbound message id, for the step's threading/audit. */
-	messageId: string;
-}
+export type {
+	ResumableRun,
+	ResumableWorkflow,
+	ResumeData,
+	WorkflowSnapshot,
+} from "./workflow.js";
 
 /** Options for {@link RineThreadResumer}. */
 export interface RineThreadResumerOptions {
@@ -81,6 +56,12 @@ export interface RineThreadResumerOptions {
 	threadMap: ThreadMapStore;
 	/** The suspended step to resume; omit when exactly one step is suspended. */
 	step?: unknown;
+	/**
+	 * Where a skipped message's id is recorded for the bounded retry. Defaults
+	 * to an {@link InMemorySetAside}, which forgets everything on restart; pass a
+	 * `SqliteSetAside` for a host whose parked messages must outlive it.
+	 */
+	setAside?: SetAsideStore;
 	/** Optional logger; defaults to `console`. Used for skip-path diagnostics. */
 	logger?: Pick<Console, "debug" | "warn">;
 }
@@ -88,15 +69,7 @@ export interface RineThreadResumerOptions {
 /** Outcome of {@link RineThreadResumer.handleInbound} — observable for drivers/tests. */
 export type ResumeOutcome =
 	| { resumed: true; runId: string }
-	| {
-			resumed: false;
-			reason:
-				| "no-map"
-				| "not-suspended"
-				| "decrypt-failed"
-				| "no-conversation"
-				| "failed";
-	  };
+	| { resumed: false; reason: ResumeSkipReason };
 
 /**
  * The sender label used as the thread `handle` key and as `resumeData.from`.
@@ -115,54 +88,66 @@ export class RineThreadResumer {
 	private readonly threadMap: ThreadMapStore;
 	private readonly step?: unknown;
 	private readonly log: Pick<Console, "debug" | "warn">;
+	/**
+	 * Where this resumer parks what it could not resume. Public and readonly so
+	 * `setaside-sweep.ts` retries the SAME store this fills: a sweep handed a
+	 * store of its own would read empty forever while the live path recorded into
+	 * another — a retry that never fires, with both halves individually correct
+	 * and no error anywhere.
+	 */
+	readonly setAside: SetAsideStore;
 
 	constructor(opts: RineThreadResumerOptions) {
 		this.workflow = opts.workflow;
 		this.threadMap = opts.threadMap;
 		this.step = opts.step;
+		this.setAside = opts.setAside ?? new InMemorySetAside();
 		this.log = opts.logger ?? console;
 	}
 
 	/**
-	 * Resume the workflow run mapped to this message's thread. Returns the
-	 * outcome; on any skip path it logs + returns `{ resumed: false }` and does
-	 * NOT ack the message (lossless — it stays in the rine inbox for a retry).
+	 * Resume the workflow run mapped to this message's thread.
+	 *
+	 * Returns the outcome; every skip path logs, records the message's id for the
+	 * bounded retry, and acknowledges nothing.
 	 */
 	async handleInbound(msg: DecryptedMessage): Promise<ResumeOutcome> {
 		const handle = senderHandle(msg);
 		const conversation = msg.conversation_id;
 		if (!handle || !conversation) {
 			this.log.debug?.(
-				"[rine] inbound has no (handle, conversation); skipping",
+				"[rine] inbound has no (handle, conversation); setting aside",
 			);
-			return { resumed: false, reason: "no-conversation" };
+			return this.setAsideSkip(msg, "no-conversation");
 		}
 
-		// Lossless: a message we can't decrypt cannot produce a safe
-		// resumeData — leave it in the inbox for a retry after key recovery.
+		// A message we can't decrypt cannot produce a safe resumeData. Its id is
+		// recorded, and the retry catches the group up before re-reading it — which
+		// is what actually heals a group message that arrived before its key.
 		if (msg.decrypt_error) {
 			this.log.debug?.(
-				`[rine] inbound ${msg.id} decrypt failed (${msg.decrypt_error}); skipping (no ack)`,
+				`[rine] inbound ${msg.id} decrypt failed (${msg.decrypt_error}); setting aside`,
 			);
-			return { resumed: false, reason: "decrypt-failed" };
+			return this.setAsideSkip(msg, "decrypt-failed");
 		}
 
 		const runId = await this.threadMap.get(handle, conversation);
 		if (!runId) {
 			this.log.debug?.(
-				`[rine] no run mapped for (${handle}, ${conversation}); skipping (no ack)`,
+				`[rine] no run mapped for (${handle}, ${conversation}); setting aside ${msg.id}`,
 			);
-			return { resumed: false, reason: "no-map" };
+			return this.setAsideSkip(msg, "no-map");
 		}
 
-		// Rehydrate from SHARED storage BEFORE resume (defends #5521). A run
-		// that is gone or no longer suspended must not be resumed — skip losslessly.
+		// Rehydrate from SHARED storage BEFORE resume (defends #5521). A run that
+		// is gone or no longer suspended must not be resumed — set aside instead,
+		// because the run this thread maps to may suspend again.
 		const snapshot = await this.workflow.getWorkflowRunById(runId);
 		if (!snapshot || snapshot.status !== "suspended") {
 			this.log.debug?.(
-				`[rine] run ${runId} not suspended (status=${snapshot?.status ?? "missing"}); skipping (no ack)`,
+				`[rine] run ${runId} not suspended (status=${snapshot?.status ?? "missing"}); setting aside ${msg.id}`,
 			);
-			return { resumed: false, reason: "not-suspended" };
+			return this.setAsideSkip(msg, "not-suspended");
 		}
 
 		// resumeData is plaintext + signature facts ONLY — JSON-serializable,
@@ -175,23 +160,50 @@ export class RineThreadResumer {
 		};
 
 		// Isolate a throwing resumed step / transient storage error, the way the
-		// langchain adapter does: a raise here must NOT propagate — it would
-		// crash the poll-loop's per-message dispatch or reject into the webhook
-		// caller's HTTP route. Skip losslessly (no ack), leaving the message in the
-		// inbox for a later retry.
+		// langchain adapter does: a raise here must NOT propagate — it would crash
+		// the driver's per-message dispatch or reject into the webhook caller's
+		// HTTP route. Set the message aside instead, so a transient storage fault
+		// costs a retry rather than the message.
 		try {
 			const run = await this.workflow.createRun({ runId });
 			await run.resume({ step: this.step, resumeData });
 		} catch (err) {
 			this.log.warn?.(
-				`[rine] resume of run ${runId} failed; skipping (no ack):`,
+				`[rine] resume of run ${runId} failed; setting aside ${msg.id}:`,
 				err,
 			);
-			return { resumed: false, reason: "failed" };
+			return this.setAsideSkip(msg, "failed");
 		}
 		this.log.debug?.(
 			`[rine] resumed run ${runId} for (${handle}, ${conversation})`,
 		);
 		return { resumed: true, runId };
+	}
+
+	/**
+	 * Record one skipped message's id, then report the skip.
+	 *
+	 * Best-effort, and the one failure here that really does lose a message says
+	 * so: the stream has already consumed the row, so an id never written down
+	 * leaves nothing to retry and nothing to name. It must not propagate — a
+	 * store fault would otherwise turn a skipped message into a crashed dispatch.
+	 *
+	 * 🔴 The reason goes through `sightingOf`, which splits `decrypt-failed` into
+	 * a retryable failure and a permanent `refused`. The arm's own reason would
+	 * put attacker-controlled bytes back on a timer the attacker paces.
+	 */
+	private async setAsideSkip(
+		msg: DecryptedMessage,
+		reason: ResumeSkipReason,
+	): Promise<ResumeOutcome> {
+		try {
+			await this.setAside.record(sightingOf(msg, reason));
+		} catch (err) {
+			this.log.warn?.(
+				`[rine] could not record set-aside message ${msg.id} (${reason}); it will not be retried:`,
+				err,
+			);
+		}
+		return { resumed: false, reason };
 	}
 }

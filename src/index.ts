@@ -92,6 +92,31 @@ export type {
 	WebhookHandlerOptions,
 } from "./drivers.js";
 
+// The set-aside store behind the resumer's bounded retry. A driver wires its own
+// sweep, so a host reaches for these only to make a parked message survive a
+// restart (`SqliteSetAside`) or to read the bounds it is running under.
+export {
+	SETASIDE_MAX_ATTEMPTS,
+	SETASIDE_MAX_ENTRIES,
+	SETASIDE_SWEEP_BATCH,
+	SETASIDE_SWEEP_INTERVAL_MS,
+} from "./constants.js";
+export { InMemorySetAside } from "./setaside.js";
+export type {
+	ResumeSkipReason,
+	SetAsideEntry,
+	SetAsideReason,
+	SetAsideSighting,
+	SetAsideStore,
+} from "./setaside.js";
+export { SqliteSetAside } from "./setaside-sqlite.js";
+export type { SqliteSetAsideOptions } from "./setaside-sqlite.js";
+// Both drivers here already wire this. It is exported for the host that feeds
+// `handleInbound` from a loop of its own, which would otherwise record parked
+// messages and never retry them.
+export { startSweepSchedule } from "./setaside-schedule.js";
+export type { ScheduleArgs } from "./setaside-schedule.js";
+
 // Out-of-band onboard helper (the `npx @rine-network/mastra onboard` CLI; NEVER a tool)
 export { parseOnboardArgs, runOnboard } from "./onboard.js";
 export type { OnboardArgs, OnboardIO, OnboardOptions } from "./onboard.js";

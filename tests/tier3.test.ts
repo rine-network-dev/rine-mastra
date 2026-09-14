@@ -8,7 +8,8 @@
  * carried ONLY plaintext — no ciphertext.
  *
  * Plus unit coverage: `SqliteThreadMap` round-trip, and `handleInbound`
- * skip-paths (no-map / not-suspended / decrypt-failed → no ack, lossless).
+ * skip-paths (no-map / not-suspended / decrypt-failed → no resume, no ack). What
+ * each skip RECORDS for the bounded retry is `setaside.test.ts`.
  */
 
 import { spawnSync } from "node:child_process";
@@ -20,10 +21,10 @@ import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RineThreadResumer } from "../src/inbound.js";
 import { InMemoryThreadMap, SqliteThreadMap } from "../src/threadmap.js";
+import { SENTINEL_CIPHERTEXT as SENTINEL, makeInbound } from "./harness.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const pkgRoot = resolve(here, "..");
-const SENTINEL = "SENTINEL_CIPHERTEXT_DO_NOT_LEAK_0xDEADBEEF";
 
 /** A fixture child's captured output (stdout/stderr coerced to strings). */
 interface ChildResult {
@@ -175,7 +176,7 @@ describe("SqliteThreadMap — durable (handle, conversation) → runId round-tri
 	});
 });
 
-describe("RineThreadResumer.handleInbound — skip paths never ack (lossless)", () => {
+describe("RineThreadResumer.handleInbound — skip paths never resume, never ack", () => {
 	/** A fake workflow whose snapshot status + resume calls are observable. */
 	function fakeWorkflow(status: string | null) {
 		const resume = vi.fn<
@@ -188,24 +189,8 @@ describe("RineThreadResumer.handleInbound — skip paths never ack (lossless)", 
 		return { workflow: { getWorkflowRunById, createRun }, resume, createRun };
 	}
 
-	function inbound(over: Record<string, unknown> = {}) {
-		return {
-			id: "m1",
-			conversation_id: "c1",
-			sender_handle: "bob@acme",
-			from_agent_id: "33333333-3333-4333-8333-333333333333",
-			type: "rine.v1.text",
-			encrypted_payload: SENTINEL,
-			encryption_version: "hpke-v1",
-			metadata: {},
-			created_at: "2026-06-11T00:00:00Z",
-			plaintext: { text: "hi" },
-			verified: true,
-			verification_status: "verified",
-			...over,
-			// biome-ignore lint/suspicious/noExplicitAny: synthetic fixture
-		} as any;
-	}
+	/** The shared fixture under this suite's own short name. */
+	const inbound = makeInbound;
 
 	const quietLogger = { debug: vi.fn(), warn: vi.fn() };
 
@@ -325,10 +310,10 @@ describe("RineThreadResumer.handleInbound — skip paths never ack (lossless)", 
 		expect(resumeData).not.toHaveProperty("thread");
 	});
 
-	it("resume that throws → failed skip, lossless (no ack, no crash)", async () => {
+	it("resume that throws → failed skip, no ack, no crash", async () => {
 		// A transient storage error or a throwing resumed step must NOT propagate
-		// out of the dispatch — it degrades to a lossless skip so the message
-		// stays in the inbox.
+		// out of the dispatch — it degrades to a skip, and the message's id is
+		// recorded for the retry (`setaside.test.ts`).
 		const map = new InMemoryThreadMap();
 		await map.set("bob@acme", "c1", "run-x");
 		const resume = vi.fn(async () => {
