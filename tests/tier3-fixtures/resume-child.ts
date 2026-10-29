@@ -60,7 +60,7 @@ const inbound = {
 	from_agent_id: "33333333-3333-4333-8333-333333333333",
 	type: "rine.v1.task_response",
 	encrypted_payload: sentinelCiphertext as string,
-	encryption_version: "hpke-v1",
+	encryption_version: "hpke-hybrid-v2",
 	metadata: {},
 	created_at: new Date().toISOString(),
 	plaintext: { text: "confirmed!" },

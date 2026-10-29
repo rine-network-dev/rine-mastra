@@ -10,6 +10,8 @@
  * so ciphertext can never reach the LLM context through a rendered string.
  */
 
+import { withA2aCleartextNotice } from "@rine-network/core";
+
 // One definition per language: the SDK owns the group predicates, so a group
 // renders the same way on every surface — and the four-state answer below is
 // composed from them here rather than re-derived per call site.
@@ -81,7 +83,8 @@ export function unwrapText(plaintext: unknown): string {
 }
 
 /**
- * Body of a message: decrypt error if unreadable, else the unwrapped plaintext.
+ * Body of a message: decrypt error if unreadable, else the unwrapped plaintext —
+ * led by the A2A cleartext notice when the body was never end-to-end encrypted.
  *
  * `explain` is the per-render tiering: pass it on a MULTI render (an inbox,
  * one call per `renderInbox()`) so the no-sender-key cause explains itself in
@@ -102,7 +105,7 @@ export function renderMessageBody(
 			explain && explanation ? explain(explanation).line : msg.decrypt_error;
 		return `[unreadable] ${text}`;
 	}
-	return unwrapText(msg.plaintext);
+	return withA2aCleartextNotice(msg, unwrapText(msg.plaintext));
 }
 
 /** Sender label: prefer the human handle, fall back to the agent UUID. */

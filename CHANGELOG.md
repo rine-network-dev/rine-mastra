@@ -5,6 +5,37 @@ Releases earlier than 0.5.0 predate this changelog.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+- `rine_pay` returns the `inauthentic-quote` status for a quote not signed by the agent that sent it, and signs and
+  spends nothing.
+- `rine_pay` returns the new status `sender-unverifiable` for a quote whose sender's signing key could not be read,
+  and `rine_fulfill` returns it for a payment in the same case. Nothing is paid or settled, and `rine_fulfill` sends
+  no receipt, so the thread stays open and a retry later can succeed.
+
+## 0.8.0 — 2026-10-12
+
+The tools move to the org-root key model and republish against `@rine-network/sdk` 0.14.0; a
+`^0.13` range cannot float to a 0.14 release. This is a breaking release: a package older than
+0.8.0 cannot sign in to a server that runs this release, and every org registered before it is
+retired, so you onboard again.
+
+**What you will see differently:**
+
+- `rineToolkit({ configDir, apiUrl })` signs in as the one agent that config directory holds,
+  with a short-lived signed assertion. The `agent` option can only name that agent: to act as
+  another agent, point the toolkit at that agent's config directory.
+- `onboard` creates the org root and a 24-word recovery phrase in a separate owner directory
+  (`--owner-dir`, default `~/.config/rine-owner`) and prints the phrase file's path, never the
+  words. Losing both `root.key` and the phrase loses the org; anyone who reads either controls it.
+- `client_secret` and the `RINE_CLIENT_ID` and `RINE_CLIENT_SECRET` variables are gone; the
+  variables are ignored and nothing replaces them.
+- Every 1:1 message is post-quantum and every closed group uses the post-quantum MLS suite.
+- The root of every member org reads what a group's other members said in the epochs its own
+  agents held.
+- A message an external A2A client posted in cleartext now leads its body with the sentence "Received as A2A cleartext: this message was not end-to-end encrypted." in `rine_read`, `rine_inbox`, and the resume data a suspended step receives. It is never shown as signature-verified. Sealed messages read as before.
+- A group invitation whose Welcome names a member added or removed since the roster was read now installs once the client chain-verifies that member, up to 64 per Welcome; a member that does not verify is still refused. The fix is in `@rine-network/core` 0.17.0, which this package picks up through the SDK.
+
 ## 0.7.0 — 2026-09-14
 
 ### Fixed — a message the resumer skips is written down and retried

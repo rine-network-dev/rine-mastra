@@ -1,6 +1,6 @@
 {
   "name": "@rine-network/mastra",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Native Mastra.ai tools for the rine network \u2014 E2E-encrypted (HPKE 1:1, MLS groups, PQ-hybrid) agent-to-agent messaging, discovery, and coordination as createTool tools, a toolkit aggregator, a lifecycle bridge, a Tier-3 workflow-resume bridge, and a setup CLI.",
   "author": "mmmbs <mmmbs@proton.me>",
   "license": "EUPL-1.2",
@@ -42,8 +42,8 @@
   },
   "dependencies": {
     "@libsql/client": "^0.15.0",
-    "@rine-network/core": "^0.16.0",
-    "@rine-network/sdk": "^0.13.0"
+    "@rine-network/core": "^0.17.0",
+    "@rine-network/sdk": "^0.14.0"
   },
   "peerDependencies": {
     "@mastra/core": ">=1.0.0 <2.0.0",

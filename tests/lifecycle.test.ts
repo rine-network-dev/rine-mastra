@@ -35,7 +35,7 @@ function sentAck() {
 		to_agent_id: PEER_AGENT_ID,
 		type: "rine.v1.text",
 		encrypted_payload: "OPAQUE_SERVER_ECHO",
-		encryption_version: "hpke-v1",
+		encryption_version: "hpke-hybrid-v2",
 		created_at: "2026-06-11T00:00:00.000Z",
 	};
 }

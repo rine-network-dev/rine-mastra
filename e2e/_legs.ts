@@ -28,6 +28,29 @@ export function check(cond: boolean, label: string): void {
 	console.log(`  [ok] ${label}`);
 }
 
+/**
+ * Read the server-side thread of every conversation whose first-hand copy at the
+ * responder carries `needle`, and require exactly one received turn on the driver
+ * side that answers it. The model's own report is not evidence of the reply count.
+ */
+export async function checkOneReply(
+	driver: AsyncRineClient,
+	responder: AsyncRineClient,
+	needle: string,
+): Promise<void> {
+	const asked = (await responder.inbox({ limit: 50 })).items.filter((m) =>
+		JSON.stringify(m.plaintext ?? "").includes(needle),
+	);
+	const convIds = [...new Set(asked.map((m) => m.conversation_id))];
+	check(convIds.length === 1, `prompt reached the responder in one conversation (${convIds.length})`);
+	const thread = await driver.thread(convIds[0] as string);
+	const replies = thread.filter((t) => t.direction === "received");
+	check(
+		asked.length === 1 && replies.length === 1,
+		`exactly one prompt and one reply in the server thread (prompts=${asked.length}, replies=${replies.length})`,
+	);
+}
+
 /** Brand a runtime recipient string for the SDK send surface (validated by the SDK). */
 const asHandle = (s: string): AgentHandle | GroupHandle =>
 	s as AgentHandle | GroupHandle;
@@ -81,7 +104,7 @@ async function awaitGroupReply(
 
 /**
  * PQ-hybrid 1:1 round-trip. Two SDK-created agents both carry an ML-KEM
- * key, so a 1:1 send negotiates `hpke-hybrid-v1`; assert the nonce round-trips as
+ * key, so a 1:1 send negotiates `hpke-hybrid-v2`; assert the nonce round-trips as
  * plaintext and the wire version is the PQ-hybrid one.
  */
 export async function legPq1to1(
@@ -96,8 +119,8 @@ export async function legPq1to1(
 		{ type: "rine.v1.task_request" },
 	);
 	check(
-		sent.encryption_version === "hpke-hybrid-v1",
-		`PQ-1:1 negotiated hpke-hybrid-v1 (got ${sent.encryption_version})`,
+		sent.encryption_version === "hpke-hybrid-v2",
+		`PQ-1:1 negotiated hpke-hybrid-v2 (got ${sent.encryption_version})`,
 	);
 	const reply = await awaitReply(client, sent.conversation_id);
 	check(!!reply, "PQ-1:1 reply received");

@@ -26,7 +26,11 @@
  */
 
 import { createTool } from "@mastra/core/tools";
-import { createdGroupMls } from "@rine-network/core";
+import {
+	GROUPS_KEY_SCOPE,
+	GROUP_READERS_NOTICE,
+	createdGroupMls,
+} from "@rine-network/core";
 import { SchemaValidationError } from "@rine-network/sdk";
 import { strResult, type z } from "./_zod.js";
 import { renderGroup, renderInvites } from "./format.js";
@@ -57,7 +61,7 @@ export function createRineGroupCreateTool(opts: RineToolOpts = {}) {
 	return createTool({
 		id: "rine_group_create",
 		description:
-			"Create a new end-to-end-encrypted coordination group. By default the group uses MLS (RFC 9420) encryption with forward secrecy. `visibility` is required and has no default: `public` lists the group at dir.rine.network and turns the member-joined signal off, `private` does neither. Name `members` to invite agents as the group is created — that is what lets an MLS group mint every leaf in a handful of commits instead of one commit per member. A founding roster mints real invitations under every enrollment policy, `majority` and `unanimity` included, because at founding the creator is the only member and therefore the whole electorate; a later invite into one of those two policies nominates instead. This is a real, irreversible network action. Returns the new group handle, id, E2EE mode, enrollment policy, and one outcome per rostered agent.",
+			"Create a new end-to-end-encrypted coordination group. By default the group uses MLS (RFC 9420) encryption with forward secrecy. `visibility` is required and has no default: `public` lists the group at dir.rine.network and turns the member-joined signal off, `private` does neither. Name `members` to invite agents as the group is created — that is what lets an MLS group mint every leaf in a handful of commits instead of one commit per member. A founding roster mints real invitations under every enrollment policy, `majority` and `unanimity` included, because at founding the creator is the only member and therefore the whole electorate; a later invite into one of those two policies nominates instead. This is a real, irreversible network action. Returns the new group handle, id, E2EE mode, enrollment policy, and one outcome per rostered agent. " + GROUP_READERS_NOTICE,
 		inputSchema: groupCreateInput,
 		outputSchema: strResult,
 		mcp: { annotations: { destructiveHint: true } },
@@ -86,7 +90,7 @@ export function createRineGroupCreateTool(opts: RineToolOpts = {}) {
 				// surface has no verb that founds a group, which is the default.
 				const { mode, note } = createdGroupMls(g);
 				const head = `Created group ${g.handle} (id ${g.id}, ${mode} E2EE, enrollment ${g.enrollment_policy}).${note ? ` ${note}` : ""}`;
-				// Item 18: a founding roster is where a silent completion seats the
+				// A founding roster is where a silent handle completion seats the
 				// wrong agent, and where it hides best — one name among twenty.
 				const typed = i.members ?? [];
 				if (!g.roster) return withHandleCompletionLine(head, typed);
@@ -130,7 +134,7 @@ export function createRineGroupInviteTool(opts: RineToolOpts = {}) {
 					const result = await client.groups.invite(group, agentId, {
 						message: i.message,
 					});
-					// Item 18, and this arm is why it is owed: `renderSingularInvite`
+					// The completion line is owed here above all: `renderSingularInvite`
 					// echoes `i.agentToInvite`, the caller's own spelling, so the answer
 					// agrees with what was typed while the invitation went to the
 					// completed handle.
@@ -184,7 +188,7 @@ export function createRineGroupInspectTool(opts: RineToolOpts = {}) {
 	return createTool({
 		id: "rine_group_inspect",
 		description:
-			"Show a group's details and encryption status (MLS vs sender-key) so you can tell how a group is run before posting to it. Accepts a group handle or UUID; it covers the groups this org's agents are seated in, and its 'your agents' line names by handle which of them hold a seat in this one.",
+			`Show a group's details and encryption status (MLS vs sender-key) so you can tell how a group is run before posting to it. Accepts a group handle or UUID; it covers the groups your key can see. ${GROUPS_KEY_SCOPE} Its 'your agents' line names by handle which of them hold a seat in this one.`,
 		inputSchema: groupInspectInput,
 		outputSchema: strResult,
 		execute: makeExecute<z.infer<typeof groupInspectInput>>(
@@ -211,7 +215,7 @@ export function createRineGroupJoinTool(opts: RineToolOpts = {}) {
 	return createTool({
 		id: "rine_group_join",
 		description:
-			"Join a group by its handle or its UUID — one your agent was invited to, one your org already holds a seat in, or one found in the public directory (rine_discover_groups). A bare name reaches only a group that has already invited this agent. Returns whether the join completed immediately or is pending approval. Calling it against a nomination another member filed for this agent is how consent is given: the request is not seated until this agent has asked for it, so a nomination that carries before that becomes an invitation to accept rather than a seat. This is a real, irreversible network action.",
+			"Join a group by its handle or its UUID — one your agent was invited to, one it already holds a seat in, an open or voted group your org owns and holds a seat in, or one found in the public directory (rine_discover_groups). A bare name reaches only a group that has already invited this agent. Returns whether the join completed immediately or is pending approval. Calling it against a nomination another member filed for this agent is how consent is given: the request is not seated until this agent has asked for it, so a nomination that carries before that becomes an invitation to accept rather than a seat. This is a real, irreversible network action. " + GROUP_READERS_NOTICE,
 		inputSchema: groupJoinInput,
 		outputSchema: strResult,
 		mcp: { annotations: { destructiveHint: true } },

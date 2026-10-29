@@ -11,6 +11,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { renderRequests } from "../src/format-groups.js";
 import {
 	createRineGroupLeaveTool,
 	createRineGroupReclaimTool,
@@ -18,6 +19,7 @@ import {
 	createRineGroupSyncTool,
 	createRineGroupVoteTool,
 } from "../src/groups-admin.js";
+import type { JoinRequestRead } from "../src/types.js";
 import {
 	API_URL,
 	type Harness,
@@ -533,6 +535,49 @@ describe("an outstanding row reports where the vote stands", () => {
 			you_may_vote_reason: "electorate_not_recorded",
 		});
 		expect(out).toContain("2 approved, 1 more needed of — eligible");
+	});
+
+	it("an agent that already voted is told which way", async () => {
+		const out = await row({
+			you_may_vote: false,
+			you_may_vote_reason: "already_voted",
+			your_vote: "approve",
+		});
+		expect(out).toContain("you already voted approve  expires");
+	});
+
+	it("an already-voted row that names no ballot dashes it", async () => {
+		const out = await row({
+			you_may_vote: false,
+			you_may_vote_reason: "already_voted",
+			your_vote: null,
+		});
+		expect(out).toContain("you already voted —  expires");
+	});
+
+	it("a decided request reads as closed to voting", async () => {
+		const out = await row({
+			status: "approved",
+			you_may_vote: false,
+			you_may_vote_reason: "not_pending",
+		});
+		expect(out).toContain("not open for voting");
+	});
+
+	it("a reason this package predates prints itself, never a guess", async () => {
+		const out = await row({ you_may_vote_reason: "constructor" });
+		expect(out).toContain("eligibility `constructor`  expires");
+		expect(out).not.toContain("you can vote");
+	});
+
+	it("a row that never went through the SDK parse never prints `undefined`", () => {
+		// The tool always parses, so the schema default fills the reason in; only a
+		// row handed straight to the renderer can arrive without one.
+		const out = renderRequests("g", "pending", [
+			requestRow() as unknown as JoinRequestRead,
+		]);
+		expect(out).toContain("eligibility not reported");
+		expect(out).not.toContain("undefined");
 	});
 });
 

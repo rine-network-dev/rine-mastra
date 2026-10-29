@@ -5,12 +5,12 @@
  * signing / policy / journal / facilitator logic is reimplemented here.
  *
  * `rine_pay` consumes a received `rine.v1.x402_payment_required` and returns the
- * `rine_pay` 7-status vocabulary VERBATIM (parity with MCP `rine_pay` and the
+ * `rine_pay` 9-status vocabulary VERBATIM (parity with MCP `rine_pay` and the
  * cc-plugin skill). `rine_fulfill` consumes a received `rine.v1.x402_payment`,
  * verifies + settles via the configured facilitator (plain external HTTP, never
  * rine), sends the receipt in-thread, and returns the PINNED payee vocabulary
  * (`settled` / `settlement-failed` / `verification-failed` / `facilitator-error`
- * / `no-facilitator` / `not-payment`), identical across every surface
+ * / `sender-unverifiable` / `no-facilitator` / `not-payment`), identical across every surface
  * (CLI/MCP/eve/mastra).
  *
  * Invariants held: deny-by-default policy; sign → reserve LAST → transmit;
@@ -34,7 +34,7 @@ import { strResult, type z } from "./_zod.js";
 import { fulfillInput, payInput } from "./schemas-payments.js";
 import { type RinePaymentToolOpts, makeExecute } from "./tool.js";
 
-/** The `rine_pay` 7-status vocabulary — reused VERBATIM from MCP `rine_pay`. */
+/** The `rine_pay` 9-status vocabulary — reused VERBATIM from MCP `rine_pay`. */
 const PAY_STATUS = {
 	SUBMITTED: "payment-submitted",
 	NO_WALLET: "no-wallet",
@@ -43,6 +43,8 @@ const PAY_STATUS = {
 	ABOVE_AUTO_PAY_THRESHOLD: "above-auto-pay-threshold",
 	ALREADY_PAID: "already-paid",
 	WALLET_BUSY: "wallet-busy",
+	INAUTHENTIC_QUOTE: "inauthentic-quote",
+	SENDER_UNVERIFIABLE: "sender-unverifiable",
 } as const;
 
 /**
@@ -56,6 +58,7 @@ const FULFILL_STATUS = {
 	SETTLEMENT_FAILED: "settlement-failed",
 	VERIFICATION_FAILED: "verification-failed",
 	FACILITATOR_ERROR: "facilitator-error",
+	SENDER_UNVERIFIABLE: "sender-unverifiable",
 	NO_FACILITATOR: "no-facilitator",
 	NOT_PAYMENT: "not-payment",
 } as const;
@@ -87,6 +90,10 @@ function payStatusFromError(err: unknown): string | null {
 			return `status: ${PAY_STATUS.ALREADY_PAID} — ${err.message}`;
 		case X402_ERROR.WALLET_BUSY:
 			return `status: ${PAY_STATUS.WALLET_BUSY} — ${err.message}`;
+		case X402_ERROR.INAUTHENTIC_SENDER:
+			return `status: ${PAY_STATUS.INAUTHENTIC_QUOTE} — ${err.message}`;
+		case X402_ERROR.SENDER_UNVERIFIABLE:
+			return `status: ${PAY_STATUS.SENDER_UNVERIFIABLE} — ${err.message}`;
 		case X402_ERROR.PER_TX_CAP_EXCEEDED:
 			return `status: ${PAY_STATUS.ABOVE_AUTO_PAY_THRESHOLD} — ${err.message}`;
 		default: {
@@ -109,7 +116,7 @@ export function createRinePayTool(opts: RinePaymentToolOpts = {}) {
 	return createTool({
 		id: "rine_pay",
 		description:
-			"Pay a received x402 payment request (rine.v1.x402_payment_required) in-thread. Decrypts the quote, selects an acceptable requirement under the agent's local spend policy (deny-by-default), signs an EIP-3009 stablecoin authorization with the agent's wallet, and sends the signed rine.v1.x402_payment back in the same conversation. The spend is reserved under a cross-process lock as the last act before the send (fail-closed: the debit stands even if the send then fails, and there is no refund). Returns a typed `status:` line — `payment-submitted` on success, or `no-wallet` / `not-payment-required` / `policy-refused` / `above-auto-pay-threshold` / `already-paid` / `wallet-busy`. It does NOT wait for settlement: the receipt arrives later as an ordinary inbox message (read it with rine_read / rine_inbox / rine_thread).",
+			"Pay a received x402 payment request (rine.v1.x402_payment_required) in-thread. Decrypts the quote, selects an acceptable requirement under the agent's local spend policy (deny-by-default), signs an EIP-3009 stablecoin authorization with the agent's wallet, and sends the signed rine.v1.x402_payment back in the same conversation. The spend is reserved under a cross-process lock as the last act before the send (fail-closed: the debit stands even if the send then fails, and there is no refund). Returns a typed `status:` line — `payment-submitted` on success, or `no-wallet` / `not-payment-required` / `policy-refused` / `above-auto-pay-threshold` / `already-paid` / `wallet-busy` / `inauthentic-quote` (the quote was not signed by the agent that sent it) / `sender-unverifiable` (the sender's signing key could not be read, so the quote could not be checked; nothing was paid or reserved, retry later). It does NOT wait for settlement: the receipt arrives later as an ordinary inbox message (read it with rine_read / rine_inbox / rine_thread).",
 		inputSchema: payInput,
 		outputSchema: strResult,
 		mcp: { annotations: { destructiveHint: true } },
@@ -161,7 +168,7 @@ export function createRineFulfillTool(opts: RinePaymentToolOpts = {}) {
 	return createTool({
 		id: "rine_fulfill",
 		description:
-			"Fulfill a received x402 payment (rine.v1.x402_payment) as the payee. Verifies the signed EIP-3009 authorization with the configured facilitator (an EXTERNAL settlement service, never rine), settles it on-chain, and sends the settlement receipt back in the same conversation. A failed verification skips settlement and sends a failure receipt so the payer's thread reaches a terminal state. Returns a typed `status:` line — `settled` (with the on-chain tx), else `settlement-failed` / `verification-failed` / `facilitator-error` / `no-facilitator` / `not-payment`. Configure the facilitator on the toolkit (`payments.facilitator`) or pass a preset key / base URL.",
+			"Fulfill a received x402 payment (rine.v1.x402_payment) as the payee. Verifies the signed EIP-3009 authorization with the configured facilitator (an EXTERNAL settlement service, never rine), settles it on-chain, and sends the settlement receipt back in the same conversation. A failed verification skips settlement and sends a failure receipt so the payer's thread reaches a terminal state. Returns a typed `status:` line — `settled` (with the on-chain tx), else `settlement-failed` / `verification-failed` / `facilitator-error` / `sender-unverifiable` (the payer's signing key could not be read, so the payment could not be checked; nothing is settled and no receipt is sent, retry later) / `no-facilitator` / `not-payment`. Configure the facilitator on the toolkit (`payments.facilitator`) or pass a preset key / base URL.",
 		inputSchema: fulfillInput,
 		outputSchema: strResult,
 		mcp: { annotations: { destructiveHint: true } },
@@ -201,6 +208,13 @@ export function createRineFulfillTool(opts: RinePaymentToolOpts = {}) {
 					// not a thrown stack trace — parity with CLI/MCP/eve.
 					if (err instanceof X402FacilitatorError) {
 						return `status: ${FULFILL_STATUS.FACILITATOR_ERROR} — ${err.message}`;
+					}
+					// The payer's key could not be read: no receipt, thread stays open.
+					if (
+						err instanceof X402Error &&
+						err.code === X402_ERROR.SENDER_UNVERIFIABLE
+					) {
+						return `status: ${FULFILL_STATUS.SENDER_UNVERIFIABLE} — ${err.message}`;
 					}
 					throw err;
 				}

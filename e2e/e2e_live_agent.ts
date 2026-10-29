@@ -1,7 +1,6 @@
 /**
- * Live-LLM end-to-end e2e. AUTHORED to RUN — it is NOT run
- * here (no creds / no LLM in this environment). It reads secrets by name from a
- * gitignored repo-root `.env.e2e` (see `_env.ts`) and is a runnable `tsx` script:
+ * Live-LLM end-to-end e2e. Reads secrets by name from a gitignored repo-root
+ * `.env.e2e` or the environment (see `_env.ts`) and runs against RINE_API_URL:
  *
  *   tsx e2e/e2e_live_agent.ts
  *
@@ -12,7 +11,7 @@
  *   4. a REAL Mastra `Agent` + REAL LLM drives discover → send_and_wait →
  *      inbox → reply, asserting a unique nonce round-trips encrypted;
  *   5. MLS-group post+read round-trip — MLS on by default;
- *   6. PQ-hybrid 1:1 round-trip — `hpke-hybrid-v1` on the wire;
+ *   6. PQ-hybrid 1:1 round-trip — `hpke-hybrid-v2` on the wire;
  *   7. Tier-3 cross-process suspend/resume demo (a step suspends, an inbound
  *      reply wakes it via the resumer; the run CONTINUES, and `resumeData`
  *      carries plaintext only);
@@ -23,13 +22,13 @@
  * resumeData.
  */
 
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { Agent } from "@mastra/core/agent";
 import { RequestContext } from "@mastra/core/request-context";
-import { type AgentHandle, AsyncRineClient } from "@rine-network/sdk";
+import { AsyncRineClient } from "@rine-network/sdk";
 import {
 	RINE_ACTING_AGENT,
 	RINE_CONFIG_DIR,
@@ -37,10 +36,18 @@ import {
 	runOnboard,
 } from "../src/index.js";
 import { envVar, requireEnv } from "./_env.js";
-import { check, legMlsGroup, legPq1to1 } from "./_legs.js";
+import { check, checkOneReply, legMlsGroup, legPq1to1 } from "./_legs.js";
 import { toolSweep } from "./_sweep.js";
-import { runTier3Demo } from "./_tier3-demo.js";
+import { tier3Leg } from "./_tier3-demo.js";
 import { startResponder } from "./responder.js";
+
+/** One throwaway root per run; every config and owner dir lives under it and is removed at exit. */
+const RUN_ROOT = mkdtempSync(join(tmpdir(), "rine-e2e-mastra-"));
+const dirUnder = (name: string): string => {
+	const dir = join(RUN_ROOT, name);
+	mkdirSync(dir);
+	return dir;
+};
 
 /** A unique value the driver expects to survive the encrypted round-trips. */
 const NONCE = `nonce-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -49,9 +56,9 @@ const SENTINEL = "CIPHERTEXT-SENTINEL-DO-NOT-LEAK";
 
 async function main(): Promise<void> {
 	// Reuses the shared repo-root `.env.e2e` contract (same secrets):
-	//   RINE_API_URL · TOGETHER_API_KEY · RINE_E2E_MODEL · RINE_E2E_BASE_URL.
-	const apiUrl = envVar("RINE_API_URL") ?? "https://rine.network";
-	const model = envVar("RINE_E2E_MODEL") ?? "meta-llama/Llama-3.3-70B-Instruct-Turbo";
+	//   RINE_API_URL (required, no default) · TOGETHER_API_KEY · RINE_E2E_MODEL · RINE_E2E_BASE_URL.
+	const apiUrl = requireEnv("RINE_API_URL");
+	const model = envVar("RINE_E2E_MODEL") ?? "deepseek-ai/DeepSeek-V4.1-Flash";
 	// A Together-style OpenAI-compatible provider (chat completions, NOT the
 	// Responses API) — the same endpoint the crewai rig drives.
 	const llm = createOpenAICompatible({
@@ -70,10 +77,13 @@ async function main(): Promise<void> {
 	const driverEmail = `${prefix}-d-${unique}@rine.network`;
 	const responderEmail = `${prefix}-r-${unique}@rine.network`;
 
-	// Two isolated config dirs: the LLM-driven "driver" agent + the responder.
-	const driverDir = mkdtempSync(join(tmpdir(), "rine-e2e-driver-"));
-	const responderDir = mkdtempSync(join(tmpdir(), "rine-e2e-responder-"));
+	// Each org owns a config dir and its own owner dir (one org root per owner dir).
+	const driverDir = dirUnder("driver-config");
+	const driverOwnerDir = dirUnder("driver-owner");
+	const responderDir = dirUnder("responder-config");
+	const responderOwnerDir = dirUnder("responder-owner");
 
+	console.log(`[e2e] api=${apiUrl} model=${model}`);
 	console.log(`[e2e] onboarding throwaway org "${driverSlug}" …`);
 	const driverHandle = await runOnboard({
 		email: driverEmail,
@@ -81,8 +91,13 @@ async function main(): Promise<void> {
 		name: "E2E Driver",
 		apiUrl,
 		configDir: driverDir,
+		ownerDir: driverOwnerDir,
 	});
-	const driver = new AsyncRineClient({ configDir: driverDir, apiUrl });
+	const driver = new AsyncRineClient({
+		configDir: driverDir,
+		ownerDir: driverOwnerDir,
+		apiUrl,
+	});
 
 	// The responder is a DISTINCT remote org (its own email + slug) so the legs
 	// exercise real cross-org 1:1 / group / PQ paths, not same-org shortcuts.
@@ -92,9 +107,11 @@ async function main(): Promise<void> {
 		name: "E2E Responder",
 		apiUrl,
 		configDir: responderDir,
+		ownerDir: responderOwnerDir,
 	});
 	const responderClient = new AsyncRineClient({
 		configDir: responderDir,
+		ownerDir: responderOwnerDir,
 		apiUrl,
 	});
 	const responderAgentId = (await responderClient.inspect(responderHandle)).id;
@@ -118,6 +135,7 @@ async function main(): Promise<void> {
 		// (4) live LLM drives the messaging tools
 		console.log("[e2e] live-LLM messaging leg …");
 		await llmLeg(driverDir, driverHandle, responderHandle, llm, model);
+		await checkOneReply(driver, responderClient, `ping ${NONCE}`);
 
 		// (5) MLS group + (6) PQ 1:1 round-trips
 		console.log("[e2e] MLS-group round-trip …");
@@ -127,7 +145,11 @@ async function main(): Promise<void> {
 
 		// (7) Tier-3 cross-process suspend/resume demo
 		console.log("[e2e] Tier-3 suspend/resume demo …");
-		await tier3Leg(driver, responderHandle);
+		await tier3Leg(driver, responderHandle, {
+			dir: dirUnder("tier3"),
+			nonce: `t3-${NONCE}`,
+			sentinel: SENTINEL,
+		});
 
 		console.log("\n[e2e] ALL LEGS PASSED ✅");
 	} finally {
@@ -173,33 +195,9 @@ async function llmLeg(
 	);
 }
 
-/** Suspend a workflow, then wake it with the responder's real reply. */
-async function tier3Leg(
-	driver: AsyncRineClient,
-	responderHandle: string,
-): Promise<void> {
-	const dir = mkdtempSync(join(tmpdir(), "rine-e2e-tier3-"));
-	const t3nonce = `t3-${NONCE}`;
-	const sent = await driver.sendAndWait(
-		responderHandle as AgentHandle,
-		{ text: `tier3 ${t3nonce}` },
-		{ timeout: 30_000 },
-	);
-	const inbound = sent.reply;
-	check(!!inbound, "Tier-3 got a real reply to seed the resumer");
-	if (!inbound) return;
-	const result = await runTier3Demo({
-		snapshotDbUrl: `file:${join(dir, "wf.db")}`,
-		threadMapUrl: `file:${join(dir, "threadmap.db")}`,
-		inbound,
-		nonce: String((inbound.plaintext as { text?: string })?.text ?? t3nonce),
-		sentinel: SENTINEL,
-	});
-	check(result.resumed, "Tier-3 run resumed (CONTINUES, not restarts)");
-	check(result.ciphertextAbsent, "Tier-3 resumeData has no ciphertext");
-}
-
-main().catch((err) => {
-	console.error("[e2e] FAILED:", err);
-	process.exitCode = 1;
-});
+main()
+	.catch((err) => {
+		console.error("[e2e] FAILED:", err);
+		process.exitCode = 1;
+	})
+	.finally(() => rmSync(RUN_ROOT, { recursive: true, force: true }));

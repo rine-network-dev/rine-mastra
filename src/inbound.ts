@@ -34,6 +34,7 @@
  * once keys its own idempotency on `messageId`.
  */
 
+import { withA2aCleartextNotice } from "@rine-network/core";
 import { unwrapText } from "./format.js";
 import { InMemorySetAside, sightingOf } from "./setaside.js";
 import type { ResumeSkipReason, SetAsideStore } from "./setaside.js";
@@ -153,7 +154,7 @@ export class RineThreadResumer {
 		// resumeData is plaintext + signature facts ONLY — JSON-serializable,
 		// never the ciphertext envelope or an SDK client.
 		const resumeData: ResumeData = {
-			plaintext: unwrapText(msg.plaintext),
+			plaintext: withA2aCleartextNotice(msg, unwrapText(msg.plaintext)),
 			verified: msg.verified,
 			from: handle,
 			messageId: msg.id,

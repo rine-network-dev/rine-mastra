@@ -24,18 +24,16 @@
  * the returned string + `h.requests`.
  */
 
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { RequestContext } from "@mastra/core/request-context";
 import {
 	type AgentKeys,
 	HttpClient,
+	saveAgentKeys,
 	decryptMessage,
 	encryptMessage,
-	generateAgentKeys,
-	saveAgentKeys,
-	saveTokenCache,
 	signingPublicKeyToJWK,
 	toBase64Url,
 } from "@rine-network/core";
@@ -48,6 +46,11 @@ import {
 	RINE_CONFIG_DIR,
 	type RineToolContext,
 } from "../src/context.js";
+import {
+	fixtureAgentKeys,
+	publishedKeys,
+	seedAgentRuntime,
+} from "@rine-network/core/testing";
 
 /** A sentinel ciphertext string seeded into envelopes for plaintext-absence checks. */
 export const SENTINEL_CIPHERTEXT = "SENTINEL_CIPHERTEXT_DO_NOT_LEAK_0xDEADBEEF";
@@ -165,44 +168,23 @@ function agentRead(id: string, name: string, keys: AgentKeys) {
 	};
 }
 
-/** The `/agents/{id}/keys` response used during signature verification. */
-function keysResponse(id: string, keys: AgentKeys) {
+function recipientKeysOf(keys: AgentKeys) {
 	return {
-		agent_id: id,
-		signing_public_key: signingPublicKeyToJWK(keys.signing.publicKey),
-		encryption_public_key: {
-			kty: "OKP",
-			crv: "X25519",
-			x: toBase64Url(keys.encryption.publicKey),
-		},
+		encryption: keys.encryption.publicKey,
+		pqEncryption: keys.pqEncryption.publicKey,
 	};
 }
 
 export function makeHarness(): Harness {
 	const configDir = mkdtempSync(join(tmpdir(), "rine-mastra-"));
-	const selfKeys = generateAgentKeys();
-	const peerKeys = generateAgentKeys();
-	saveAgentKeys(configDir, SELF_AGENT_ID, selfKeys);
-	saveAgentKeys(configDir, PEER_AGENT_ID, peerKeys);
-
-	// credentials.json so `loadCredentials` resolves the default profile, and a
-	// non-expiring token_cache so the OAuth mint never hits the wire.
-	writeFileSync(
-		join(configDir, "credentials.json"),
-		JSON.stringify({
-			default: {
-				client_id: "test-client",
-				client_secret: "test-secret",
-				poll_url: "/poll/test-token",
-			},
-		}),
-	);
-	saveTokenCache(configDir, {
-		default: {
-			access_token: "test-token",
-			expires_at: Date.now() / 1000 + 3600,
-		},
+	// The self agent's runtime dir: leaf keys, an `agent:` profile and a live
+	// cached token, so the OAuth mint never hits the wire. The peer's keys sit in
+	// the same dir so `peerDecrypt` can open as the peer.
+	const selfKeys = seedAgentRuntime(configDir, SELF_AGENT_ID, {
+		pollUrl: "/poll/test-token",
 	});
+	const peerKeys = fixtureAgentKeys(PEER_AGENT_ID);
+	saveAgentKeys(configDir, PEER_AGENT_ID, peerKeys);
 
 	const requests: RecordedRequest[] = [];
 	const routes: Route[] = [];
@@ -227,12 +209,12 @@ export function makeHarness(): Harness {
 	routes.push({
 		method: "GET",
 		pathRe: new RegExp(`^/agents/${SELF_AGENT_ID}/keys$`),
-		handler: () => ({ json: keysResponse(SELF_AGENT_ID, selfKeys) }),
+		handler: () => ({ json: publishedKeys(SELF_AGENT_ID) }),
 	});
 	routes.push({
 		method: "GET",
 		pathRe: new RegExp(`^/agents/${PEER_AGENT_ID}/keys$`),
-		handler: () => ({ json: keysResponse(PEER_AGENT_ID, peerKeys) }),
+		handler: () => ({ json: publishedKeys(PEER_AGENT_ID) }),
 	});
 	// 🔴 A UUID-addressed group verb reads the group's OWN row first, and no test
 	// here used to answer that route. An unanswered route was worse
@@ -313,7 +295,8 @@ export function makeHarness(): Harness {
 			const enc = await encryptMessage(
 				configDir,
 				PEER_AGENT_ID,
-				selfKeys.encryption.publicKey,
+				SELF_AGENT_ID,
+				recipientKeysOf(selfKeys),
 				payload,
 			);
 			return {
@@ -323,16 +306,21 @@ export function makeHarness(): Harness {
 			};
 		},
 		async ownEncrypt(payload) {
-			// REAL HPKE seal: self signs, self decrypts — the shape of a self-sealed
-			// copy of the self-agent's own send.
+			// REAL seal: self signs for the peer, and the self-sealed copy is what a
+			// row the server reports as coming from the self-agent carries. Self
+			// opens it with the peer as the signed-for recipient.
 			const enc = await encryptMessage(
 				configDir,
 				SELF_AGENT_ID,
-				selfKeys.encryption.publicKey,
+				PEER_AGENT_ID,
+				recipientKeysOf(peerKeys),
 				payload,
 			);
+			if (enc.self_encrypted_payload === undefined) {
+				throw new Error("harness: encryptMessage returned no self-sealed copy");
+			}
 			return {
-				encrypted_payload: enc.encrypted_payload,
+				encrypted_payload: enc.self_encrypted_payload,
 				encryption_version: enc.encryption_version,
 				sender_signing_kid: enc.sender_signing_kid ?? null,
 			};
@@ -390,7 +378,7 @@ export function routeGroupRow(
  *
  * The other half of {@link routeGroupRow}, and the answer production gives for
  * an agent UUID. A UUID recipient is probed against the group
- * namespace first, because `GET /groups/{id}` is org-scoped where
+ * namespace first, because `GET /groups/{id}` is credential-scoped where
  * `GET /agents/{id}/keys` is global — so asking the agent side first would
  * prefer a stranger's namespace over the caller's own org's. The resolver
  * swallows the 404 as a miss and falls through to the agent rung.
@@ -476,7 +464,7 @@ export function makeInbound(
 		from_agent_id: "33333333-3333-4333-8333-333333333333",
 		type: "rine.v1.text",
 		encrypted_payload: SENTINEL_CIPHERTEXT,
-		encryption_version: "hpke-v1",
+		encryption_version: "hpke-hybrid-v2",
 		metadata: {},
 		created_at: "2026-06-11T00:00:00Z",
 		plaintext: { text: "hi" },

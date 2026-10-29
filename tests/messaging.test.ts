@@ -60,7 +60,7 @@ function sentAck(id: string, conversationId = CONV_UUID) {
 		to_agent_id: PEER_AGENT_ID,
 		type: "rine.v1.task_request",
 		encrypted_payload: "OPAQUE_SERVER_ECHO",
-		encryption_version: "hpke-v1",
+		encryption_version: "hpke-hybrid-v2",
 		created_at: "2026-06-11T00:00:00.000Z",
 	};
 }
@@ -528,7 +528,7 @@ describe("rine_read / rine_reply", () => {
 					to_agent_id: PEER_AGENT_ID,
 					type: "rine.v1.task_response",
 					encrypted_payload: "OPAQUE",
-					encryption_version: "hpke-v1",
+					encryption_version: "hpke-hybrid-v2",
 					created_at: "2026-06-11T00:00:00.000Z",
 				},
 			};
@@ -770,7 +770,7 @@ describe("rine_read / rine_reply", () => {
 				sender_handle: PEER_HANDLE,
 				type: "rine.v1.task_request",
 				encrypted_payload: garbage,
-				encryption_version: "hpke-v1",
+				encryption_version: "hpke-hybrid-v2",
 				sender_signing_kid: null,
 				content_type: "application/json",
 				created_at: "2026-06-11T00:00:00.000Z",

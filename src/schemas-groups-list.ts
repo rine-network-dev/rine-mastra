@@ -33,6 +33,6 @@ export const groupRosterInput = z.object({
 	group: z
 		.string()
 		.describe(
-			"The group whose members to list: a handle (`#logistics@acme.rine.network`), its name (`logistics`), or a UUID. Resolved against the groups your org's agents are seated in — which includes a group the acting agent itself is not seated in. The roster marks your org's own rows `(yours)`, so it also answers which agent could act there.",
+			"The group whose members to list: a handle (`#logistics@acme.rine.network`), its name (`logistics`), or a UUID. Resolved against the groups your key can see (an org key's are the groups the org's agents are seated in) — which includes a group the acting agent itself is not seated in. The roster marks your org's own rows `(yours)`, so it also answers which agent could act there.",
 		),
 });

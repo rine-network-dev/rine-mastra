@@ -40,7 +40,11 @@ export interface ResumableRun {
  * plaintext + signature facts ONLY — no ciphertext, no envelope, no SDK client.
  */
 export interface ResumeData {
-	/** Unwrapped decrypted body (or a decrypt-error marker), never ciphertext. */
+	/**
+	 * Unwrapped decrypted body (or a decrypt-error marker), never ciphertext. An A2A
+	 * message that arrived as cleartext leads with the sentence saying it was not
+	 * end-to-end encrypted.
+	 */
 	plaintext: string;
 	/** Whether the signature verified as the server-authenticated sender's. */
 	verified: boolean;

@@ -58,6 +58,16 @@ function groupJson(over: Record<string, unknown> = {}) {
 	};
 }
 
+/** The roster a founding reads back: the founder, alone, with no outstanding invitation. */
+function routeFoundingRoster(): void {
+	h.route("GET", new RegExp(`^/groups/${GROUP_ID}/members$`), () => ({
+		json: { items: [{ agent_id: SELF_AGENT_ID }] },
+	}));
+	h.route("GET", new RegExp(`^/groups/${GROUP_ID}/requests$`), () => ({
+		json: { items: [] },
+	}));
+}
+
 describe("rine_group_create (enableMls)", () => {
 	it("passes enableMls through and renders the MLS-latched group", async () => {
 		let createBody: Record<string, unknown> | undefined;
@@ -78,6 +88,7 @@ describe("rine_group_create (enableMls)", () => {
 		}));
 		h.route("POST", /^\/groups\/.+\/mls/, () => ({ json: {} }));
 		h.route("GET", /^\/groups\/.+\/mls/, () => ({ json: {} }));
+		routeFoundingRoster();
 		// A landing init: the founder is the only member with a KeyPackage, so
 		// the founding commit admits nobody and the server accepts it.
 		h.route("POST", new RegExp(`^/groups/${GROUP_ID}/mls/init$`), () => ({
@@ -149,6 +160,7 @@ describe("rine_group_create (enableMls)", () => {
 		}));
 		h.route("POST", /^\/groups\/.+\/mls/, () => ({ json: {} }));
 		h.route("GET", /^\/groups\/.+\/mls/, () => ({ json: {} }));
+		routeFoundingRoster();
 		h.route("POST", new RegExp(`^/groups/${GROUP_ID}/mls/init$`), () => ({
 			json: { mls_pending: true, members: [] },
 		}));
@@ -577,8 +589,8 @@ const REQUEST_ID = "99999999-9999-4999-8999-999999999999";
 /**
  * `join` is the one group verb aimed at a group this org is by definition NOT
  * in, so it does not resolve through `groups.list()` like its five siblings. It
- * hands the reference to the SDK's join-scoped ladder — the org's own seats by
- * exact handle, then this agent's invitations, then the public directory — and
+ * hands the reference to the SDK's join-scoped ladder — this agent's own seats by
+ * exact handle, then its invitations, then the org's open and voted groups, then the public directory — and
  * reads a bare name against those invitations alone. Driven end to end here:
  * the mock boundary is HTTP, so every rung is a real request this suite can see.
  */
@@ -637,7 +649,7 @@ describe("rine_group_join (the join-scoped ladder, NOT groups.list())", () => {
 			`Joined ${GROUP_HANDLE} (member id 44444444-4444-4444-8444-444444444444).`,
 		);
 		expect(joinBody).toMatchObject({ message: "let me in" });
-		// The org-scoped rung is asked by EXACT handle — `?handle=`, which the
+		// The seat rung is asked by EXACT handle — `?handle=`, which the
 		// server matches whole — and never as the unfiltered member list the other
 		// five verbs page through. A join cannot be answered by "one of yours".
 		const ownGroups = h.requests.filter((r) => /^\/groups$/.test(r.path));
@@ -732,6 +744,7 @@ describe("rine_group_join (the join-scoped ladder, NOT groups.list())", () => {
 		h.route("GET", /^\/groups\/invites$/, () => ({
 			json: { items: [], total: 0, next_cursor: null, prev_cursor: null },
 		}));
+		h.route("GET", /^\/groups\/org-joinable$/, () => ({ json: { id: null } }));
 		h.route("GET", /^\/directory\/groups$/, () => ({
 			json: {
 				items: [
@@ -778,6 +791,7 @@ describe("rine_group_join (the join-scoped ladder, NOT groups.list())", () => {
 		h.route("GET", /^\/groups\/invites$/, () => ({
 			json: { items: [], total: 0, next_cursor: null, prev_cursor: null },
 		}));
+		h.route("GET", /^\/groups\/org-joinable$/, () => ({ json: { id: null } }));
 		h.route("GET", /^\/directory\/groups$/, () => ({
 			json: { items: [], total: 0, next_cursor: null },
 		}));
@@ -951,5 +965,15 @@ describe("rine_group_invites (list the caller's pending invites)", () => {
 		});
 		const out = await runTool(tool, {}, h);
 		expect(out).toBe("No pending group invites.");
+	});
+});
+
+describe("group create/join descriptions carry the member-org reader notice", () => {
+	it.each([
+		["rine_group_create", createRineGroupCreateTool],
+		["rine_group_join", createRineGroupJoinTool],
+	])("%s tells the model every member org can read the group", (_name, make) => {
+		const description = make({ configDir: h.configDir, apiUrl: API_URL }).description ?? "";
+		expect(description).toContain("Every member organisation can read this group");
 	});
 });

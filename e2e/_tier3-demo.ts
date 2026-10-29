@@ -18,13 +18,19 @@
 import { Mastra } from "@mastra/core/mastra";
 import { createStep, createWorkflow } from "@mastra/core/workflows";
 import { LibSQLStore } from "@mastra/libsql";
-import type { DecryptedMessage } from "@rine-network/sdk";
+import type {
+	AgentHandle,
+	AsyncRineClient,
+	DecryptedMessage,
+} from "@rine-network/sdk";
+import { join } from "node:path";
 import { z } from "zod";
 import {
 	type ResumableWorkflow,
 	RineThreadResumer,
 	SqliteThreadMap,
 } from "../src/index.js";
+import { check } from "./_legs.js";
 
 const WAIT_STEP_ID = "wait-for-rine-reply";
 
@@ -123,4 +129,29 @@ export async function runTier3Demo(args: {
 			!captured.includes("encrypted_payload") &&
 			captured.includes(args.nonce),
 	};
+}
+
+/** Suspend a workflow, then wake it with the responder's real reply. */
+export async function tier3Leg(
+	driver: AsyncRineClient,
+	responderHandle: string,
+	opts: { dir: string; nonce: string; sentinel: string },
+): Promise<void> {
+	const sent = await driver.sendAndWait(
+		responderHandle as AgentHandle,
+		{ text: `tier3 ${opts.nonce}` },
+		{ timeout: 30_000 },
+	);
+	const inbound = sent.reply;
+	check(!!inbound, "Tier-3 got a real reply to seed the resumer");
+	if (!inbound) return;
+	const result = await runTier3Demo({
+		snapshotDbUrl: `file:${join(opts.dir, "wf.db")}`,
+		threadMapUrl: `file:${join(opts.dir, "threadmap.db")}`,
+		inbound,
+		nonce: String((inbound.plaintext as { text?: string })?.text ?? opts.nonce),
+		sentinel: opts.sentinel,
+	});
+	check(result.resumed, "Tier-3 run resumed (CONTINUES, not restarts)");
+	check(result.ciphertextAbsent, "Tier-3 resumeData has no ciphertext");
 }

@@ -197,7 +197,7 @@ export const groupSyncInput = z.object({
 	group: z
 		.string()
 		.describe(
-			"The group to catch this host's local state up with: a handle (`#logistics@acme.rine.network`), its name (`logistics`), or a UUID. On an MLS group the cheap rung replays the commits the server still holds and posts nothing; the expensive one posts a single external commit that re-seats this agent's leaf at the current epoch, which is O(members) and billed to every member. An open group runs sender keys and has no epoch chain, so there this installs the sender keys this host is missing — the ones waiting in its own inbox — and posts nothing. A group created to run MLS whose ratchet tree was never founded gets that same install and a warning that it has not got the MLS it was created for: a member has to found the group's MLS state.",
+			"The group to catch this host's local state up with: a handle (`#logistics@acme.rine.network`), its name (`logistics`), or a UUID. On an MLS group the cheap rung replays the commits the server still holds and posts nothing itself; the expensive one posts a single external commit that re-seats this agent's leaf at the current epoch, which is O(members) and billed to every member. An open group runs sender keys and has no epoch chain, so there this installs the sender keys this host is missing — the ones waiting in its own inbox — and posts nothing. A recovery that keeps this agent in an MLS group then moves its own leaf to its current key, which can post one path-only commit; the report says where the leaf stands. A group created to run MLS whose ratchet tree was never founded gets that same install and a warning that it has not got the MLS it was created for: a member has to found the group's MLS state.",
 		),
 });
 

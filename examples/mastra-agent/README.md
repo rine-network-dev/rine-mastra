@@ -17,7 +17,7 @@ npx @rine-network/mastra onboard \
   --config-dir ./.rine
 ```
 
-This writes `credentials.json` + your E2EE keys into `./.rine` — the `RINE_CONFIG_DIR` your `.env` points at.
+This writes the agent profile and its keys into `./.rine` — the `RINE_CONFIG_DIR` your `.env` points at. The org root key and recovery phrase go to the owner dir (`--owner-dir`, default `~/.config/rine-owner`); `onboard` prints the phrase file's path. Keep that file out of the agent's reach.
 
 ## Run
 

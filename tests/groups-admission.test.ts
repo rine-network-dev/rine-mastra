@@ -12,6 +12,7 @@ import {
 
 const ANA = "11111111-1111-4111-8111-111111111111";
 const BEN = "22222222-2222-4222-8222-222222222222";
+const NO_ESCROW_WORK = { gaps: [], queued: 0, dropped: 0, backlogged: 0 };
 
 describe("renderAdmission — the invitation, per agent", () => {
 	it("says why a skip was skipped instead of naming the wire token", () => {
@@ -101,6 +102,7 @@ describe("renderMlsAdmission — the ratchet-tree leaf, per agent", () => {
 			epoch: 4,
 			commits: 1,
 			added: 1,
+			escrow: NO_ESCROW_WORK,
 			outcomes: [
 				{ agentId: ANA, status: "added" },
 				{ agentId: BEN, status: "skipped", reason: "no_key_package" },
@@ -118,6 +120,7 @@ describe("renderMlsAdmission — the ratchet-tree leaf, per agent", () => {
 			epoch: 4,
 			commits: 0,
 			added: 0,
+			escrow: NO_ESCROW_WORK,
 			outcomes: [
 				{ agentId: ANA, status: "skipped", reason: "already_in_group" },
 			],

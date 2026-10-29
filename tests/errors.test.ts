@@ -136,7 +136,7 @@ describe("formatError — error table", () => {
 	// The ORDER is the substance: `rine_discover_groups` reaches only
 	// `visibility == "public"` groups, so a member of a PRIVATE group who
 	// mistypes the handle needs `rine_groups` — which lists every group the
-	// org holds a seat in — named first.
+	// credential can see — named first.
 	it("names rine_groups before rine_discover_groups", () => {
 		const out = formatError(new NotFoundError("Group not found"));
 		expect(out).toContain("rine_groups");

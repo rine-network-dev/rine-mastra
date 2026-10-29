@@ -33,9 +33,11 @@ import { createRineWhoamiTool } from "../src/discovery.js";
 import {
 	API_URL as HARNESS_API_URL,
 	type Harness,
+	SELF_AGENT_ID,
 	makeHarness,
 	runTool,
 } from "./harness.js";
+import { seedAgentRuntime } from "@rine-network/core/testing";
 
 /** The wire name, spelled literally: importing the constant here would assert
  * it against itself and pass just as happily if it were renamed. */
@@ -77,10 +79,7 @@ function sentActorHeader(): string | undefined {
 beforeEach(() => {
 	_resetClientCache();
 	configDir = fs.mkdtempSync(join(tmpdir(), "rine-mastra-actor-env-"));
-	fs.writeFileSync(
-		join(configDir, "credentials.json"),
-		JSON.stringify({ default: { client_id: "id", client_secret: "sec" } }),
-	);
+	seedAgentRuntime(configDir, SELF_AGENT_ID);
 	process.env.RINE_AGENT = "kofi";
 	installFetchStub();
 });

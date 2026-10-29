@@ -7,7 +7,11 @@
  * the right config is resolved and that the cache shares instances.
  */
 
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { resolveApiUrl, resolveConfigDir } from "@rine-network/core";
+import { seedAgentRuntime, seedOrgIdentity } from "@rine-network/core/testing";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { _resetClientCache, getRineClient } from "../src/client.js";
 
@@ -86,7 +90,7 @@ describe("getRineClient — config resolution", () => {
 	});
 
 	it("there is NO RINE_TOKEN env knob in the auth model", () => {
-		// The SDK auth chain is RINE_CLIENT_ID/SECRET + credentials.json — never a
+		// The SDK auth chain is the profile and agent keys in the config dir — never a
 		// raw bearer token. Prove RINE_TOKEN is NOT consulted by showing that
 		// changing it (without resetting the cache) does NOT change client
 		// resolution: the second call with the SAME (configDir, apiUrl) returns the
@@ -114,5 +118,38 @@ describe("getRineClient — config resolution", () => {
 		process.env.RINE_TOKEN = "bogus-token-B";
 		const envAfter = getRineClient();
 		expect(envAfter).toBe(envBefore);
+	});
+});
+
+describe("getRineClient sign-in", () => {
+	it("signs in as the agent while the owner dir holds an org root", async () => {
+		const base = mkdtempSync(join(tmpdir(), "rine-client-"));
+		const configDir = join(base, "runtime");
+		const ownerDir = join(base, "owner");
+		const agentId = "622684e9-8ef3-4633-b407-b658c23c6b1f";
+		seedAgentRuntime(configDir, agentId, { cacheToken: false });
+		seedOrgIdentity(ownerDir);
+		vi.stubEnv("RINE_OWNER_DIR", ownerDir);
+		const assertions: string[] = [];
+		vi.stubGlobal("fetch", async (url: string | URL | Request, init?: RequestInit) => {
+			const json = (body: unknown) => Response.json(body, { status: 200 });
+			if (String(url).endsWith("/oauth/token")) {
+				const form = new URLSearchParams(String(init?.body));
+				assertions.push(form.get("client_assertion") ?? "");
+				return json({ access_token: "t", expires_in: 900 });
+			}
+			return json({ items: [], total: 0 });
+		});
+		try {
+			await getRineClient({ configDir, apiUrl: "https://rine.test" }).listAgents();
+		} finally {
+			vi.unstubAllEnvs();
+			vi.unstubAllGlobals();
+			rmSync(base, { recursive: true, force: true });
+		}
+		const claims = JSON.parse(
+			Buffer.from(assertions[0]?.split(".")[1] ?? "", "base64url").toString(),
+		);
+		expect(claims.iss).toBe(`agent:${agentId}`);
 	});
 });

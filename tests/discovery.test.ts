@@ -15,6 +15,7 @@ import {
 	createRineWhoamiTool,
 } from "../src/discovery.js";
 import { API_URL, type Harness, makeHarness, runTool } from "./harness.js";
+import { FIXTURE_ORG_ID } from "@rine-network/core/testing";
 
 let h: Harness;
 
@@ -142,9 +143,17 @@ describe("rine_inspect", () => {
 
 describe("rine_whoami", () => {
 	it("renders the org, tier and live handles, dropping revoked agents", async () => {
-		h.route("GET", /^\/agents$/, () => ({
+		h.route("GET", /^\/whoami$/, () => ({
 			json: {
-				items: [
+				org: {
+					id: FIXTURE_ORG_ID,
+					name: "Acme",
+					slug: "acme",
+					trust_tier: 2,
+					created_at: "2026-06-01T00:00:00.000Z",
+				},
+				principal: { kind: "agent", branch: "main", agent_id: A1 },
+				agents: [
 					{
 						id: A1,
 						name: "support",
@@ -159,18 +168,6 @@ describe("rine_whoami", () => {
 						revoked_at: "2026-07-01T00:00:00.000Z",
 					},
 				],
-				total: 2,
-				next_cursor: null,
-				prev_cursor: null,
-			},
-		}));
-		h.route("GET", /^\/org$/, () => ({
-			json: {
-				id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
-				name: "Acme",
-				slug: "acme",
-				trust_tier: 2,
-				created_at: "2026-06-01T00:00:00.000Z",
 			},
 		}));
 

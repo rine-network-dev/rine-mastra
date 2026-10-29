@@ -1,5 +1,6 @@
 /**
- * Item 18 on the Mastra surface — a completed handle is reported, not silent.
+ * Handle completion on the Mastra surface — a completed handle is reported,
+ * not silent.
  *
  * `resolveToUuid` completes a short handle before WebFinger sees it — `peer@acme`
  * is looked up as `peer@acme.rine.network` — and answers with the resolved UUID,

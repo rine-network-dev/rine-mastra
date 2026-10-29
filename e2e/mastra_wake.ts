@@ -7,13 +7,17 @@
  * Lives inside the package `e2e/` dir so Node resolves `@rine-network/sdk` from
  * `rine-mastra/node_modules` (no ad-hoc NODE_PATH needed).
  *
- *   RINE_CONFIG_DIR=/path/to/creds/leon RINE_E2E_MARKER=MASTRA-LIVE-xyz \
+ *   RINE_API_URL=<url> RINE_CONFIG_DIR=<throwaway agent config dir> RINE_E2E_MARKER=MASTRA-LIVE-xyz \
  *   RINE_E2E_HOOK=mast tsx rine-mastra/e2e/mastra_wake.ts
  */
 import { AsyncRineClient, defineAgent, type DecryptedMessage } from "@rine-network/sdk";
 
-const apiUrl = process.env.RINE_API_URL ?? "https://rine.network";
-const configDir = process.env.RINE_CONFIG_DIR!; // /path/to/creds/leon
+const apiUrl = process.env.RINE_API_URL; // required: no production default
+const configDir = process.env.RINE_CONFIG_DIR; // a throwaway agent config dir
+if (!apiUrl || !configDir) {
+	console.error("RINE_API_URL and RINE_CONFIG_DIR are required (no production or home-dir fallback)");
+	process.exit(2);
+}
 const hook = process.env.RINE_E2E_HOOK ?? ""; // metadata["rine.hook_name"] to match
 const marker = process.env.RINE_E2E_MARKER ?? ""; // body marker to match (optional)
 const timeoutMs = Number(process.env.RINE_E2E_WAKE_TIMEOUT ?? 90000);

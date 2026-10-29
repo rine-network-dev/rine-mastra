@@ -93,13 +93,13 @@ export async function resolveAgentUuids(apiUrl: string, targets: string[]) {
  *
  * 🔴 The SDK's own join ladder, not a copy of one, and NOT the ladder the other
  * twelve group tools take. `client.groups.resolveRef` is scoped at every rung
- * to a group the ORG already owns or is seated in — which for a join is the one
+ * to a group the caller's scope already owns or is seated in — which for a join is the one
  * set the target cannot be in — and this package
  * used to answer instead from `groups.listInvites()` alone, so the commonest
  * join there is, a handle read straight off `rine_discover_groups`, was refused
  * here with the server never having been asked. `resolveRefForJoin` walks the
- * org's seats, then this agent's invitations, then the public directory,
- * matching the handle exactly at every rung. What this package could always do
+ * this agent's seats, then its invitations, then the org's open and voted groups, then the
+ * public directory, matching the handle exactly at every rung. What this package could always do
  * it still does: a BARE name resolves against this agent's own pending
  * invitations — and against nothing else, because that list is the only set
  * bounded to groups that have already asked for this agent, and a join cannot

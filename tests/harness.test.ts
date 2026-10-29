@@ -62,7 +62,7 @@ describe("harness", () => {
 		const env = await h.selfEncrypt({ text: SENTINEL_CIPHERTEXT });
 		// The encrypted payload is real ciphertext, not the cleartext sentinel.
 		expect(env.encrypted_payload).not.toContain(SENTINEL_CIPHERTEXT);
-		expect(env.encryption_version).toBe("hpke-v1");
+		expect(env.encryption_version).toBe("hpke-hybrid-v2");
 	});
 
 	it("records the observable HTTP boundary", async () => {
@@ -96,7 +96,11 @@ describe("harness", () => {
 		const env = await encryptMessage(
 			h.configDir,
 			PEER_AGENT_ID,
-			h.peerKeys.encryption.publicKey,
+			PEER_AGENT_ID,
+			{
+				encryption: h.peerKeys.encryption.publicKey,
+				pqEncryption: h.peerKeys.pqEncryption.publicKey,
+			},
 			{ text: "not signed by the self-agent" },
 		);
 

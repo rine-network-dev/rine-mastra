@@ -43,9 +43,9 @@ export const NO_CONVERSATION = "(none — nothing has been said in this group ye
 /**
  * What a group renders in place of an agent list when this org holds no seat.
  *
- * The group list is ORG-scoped — it reports every group any agent of this org
- * is in — so a row on it was never proof that the agent this host is acting as
- * may post there. The empty list is that proof's absence stated plainly: no
+ * The group list is key-scoped — an org key sees every group any agent of this
+ * org is in, an agent key only its own seats — so a row on it was never proof
+ * that the agent this host is acting as may post there. The empty list is that proof's absence stated plainly: no
  * agent of this org is seated, and a send into the group would be refused.
  *
  * Never omitted, for the reason `NO_CONVERSATION` gives above: a clause a model
@@ -134,7 +134,7 @@ export function groupModeLabel(g: GroupRead): string {
  *
  * It also names which of this org's agents hold a seat here. `member_count` is
  * the whole roster across every org; this clause is the caller's own share of
- * it, and it is the only thing on an org-scoped row that says whether this org
+ * it, and it is the only thing on a key-scoped row that says whether this org
  * can act in the group at all.
  *
  * That clause closes the row with `; ` rather than `, ` because its VALUE is a
@@ -151,11 +151,11 @@ function renderGroupRow(g: GroupRead, handles?: AgentHandleMap): string {
 }
 
 /**
- * A numbered list of the groups this org's agents are seated in, or the
- * empty-state line.
+ * A numbered list of the groups your key can see (for an org key, those
+ * this org's agents are seated in), or the empty-state line.
  *
- * The list is org-scoped, and each row's `your agents` clause names which of
- * this org's agents are seated in that group — an empty clause means none of
+ * The list is key-scoped, and each row's `your agents` clause names which
+ * of the caller's agents are seated in that group — an empty clause means none of
  * them is, and a send into that group would be refused. The clause names them
  * by handle because that is the spelling `rine_whoami` prints, so the two
  * outputs can be read against each other — a UUID matched nothing this surface

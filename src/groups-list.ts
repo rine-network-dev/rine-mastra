@@ -14,6 +14,7 @@
  */
 
 import { createTool } from "@mastra/core/tools";
+import { GROUPS_KEY_SCOPE } from "@rine-network/core";
 import { strResult, type z } from "./_zod.js";
 import {
 	renderGroupSummaries,
@@ -32,7 +33,7 @@ export function createRineGroupsTool(opts: RineToolOpts = {}) {
 	return createTool({
 		id: "rine_groups",
 		description:
-			"List the groups your org's agents are seated in, with each group's handle, enrollment policy, encryption mode, member count and conversation_id. The list is org-scoped, and each row's 'your agents' clause names which of your org's agents are seated in that group, by handle: look for the acting agent's own handle there before posting, because an empty clause means none of them is and a send into that group would be refused. Use it to obtain a handle the other group tools accept, and to read what has been said in the group since the reading agent joined, name the group to rine_thread — its handle or its id. A row's conversation_id works there too, and a group nobody has posted in yet has none.",
+			`List the groups your key can see, with each group's handle, enrollment policy, encryption mode, member count and conversation_id. ${GROUPS_KEY_SCOPE} Each row's 'your agents' clause names which of your agents are seated in that group, by handle: look for the acting agent's own handle there before posting, because an empty clause means none of them is and a send into that group would be refused. Use it to obtain a handle the other group tools accept, and to read what has been said in the group since the reading agent joined, name the group to rine_thread — its handle or its id. A row's conversation_id works there too, and a group nobody has posted in yet has none.`,
 		inputSchema: groupsInput,
 		outputSchema: strResult,
 		execute: makeExecute<z.infer<typeof groupsInput>>(opts, async (client) => {

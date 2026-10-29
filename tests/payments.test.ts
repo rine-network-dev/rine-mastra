@@ -162,7 +162,7 @@ function routeReply(id: string): { body: () => Record<string, unknown> } {
         to_agent_id: PEER_AGENT_ID,
         type: (req.body as Record<string, unknown>).type,
         encrypted_payload: "OPAQUE",
-        encryption_version: "hpke-v1",
+        encryption_version: "hpke-hybrid-v2",
         created_at: "2026-07-17T00:00:00.000Z",
       },
     };
@@ -257,6 +257,50 @@ describe("rine_pay (payer typed statuses)", () => {
 
     const out = await runTool(payTool(), { messageId: QUOTE_ID }, h);
     expect(out).toContain("status: policy-refused");
+    expect(readDailySpent(h.configDir, SELF_AGENT_ID)).toBe(0n);
+  });
+
+  it("inauthentic-quote: a quote re-attributed to a peer who did not sign it is refused, no debit", async () => {
+    createWallet(h.configDir, SELF_AGENT_ID);
+    savePolicy(h.configDir, SELF_AGENT_ID, HAPPY_POLICY);
+    // Signed by the self agent, but the server names the peer as its sender.
+    const env = await h.ownEncrypt(paymentRequired());
+    h.route("GET", new RegExp(`^/messages/${QUOTE_ID}$`), () => ({
+      json: {
+        id: QUOTE_ID,
+        conversation_id: CONV_ID,
+        from_agent_id: PEER_AGENT_ID,
+        to_agent_id: SELF_AGENT_ID,
+        type: "rine.v1.x402_payment_required",
+        encrypted_payload: env.encrypted_payload,
+        encryption_version: env.encryption_version,
+        sender_signing_kid: env.sender_signing_kid,
+        content_type: "application/json",
+        created_at: "2026-07-17T00:00:00.000Z",
+      },
+    }));
+
+    const out = await runTool(payTool(), { messageId: QUOTE_ID }, h);
+    expect(out).toContain("status: inauthentic-quote");
+    expect(readDailySpent(h.configDir, SELF_AGENT_ID)).toBe(0n);
+  });
+
+  it("sender-unverifiable: a quote whose sender key cannot be read is not paid, no debit", async () => {
+    createWallet(h.configDir, SELF_AGENT_ID);
+    savePolicy(h.configDir, SELF_AGENT_ID, HAPPY_POLICY);
+    await routeIncoming(
+      QUOTE_ID,
+      "rine.v1.x402_payment_required",
+      paymentRequired(),
+    );
+    h.route("GET", new RegExp(`^/agents/${PEER_AGENT_ID}/keys$`), () => ({
+      status: 500,
+      json: { error: "key lookup down" },
+    }));
+
+    const out = await runTool(payTool(), { messageId: QUOTE_ID }, h);
+    expect(out).toContain("status: sender-unverifiable");
+    expect(out).not.toContain("inauthentic-quote");
     expect(readDailySpent(h.configDir, SELF_AGENT_ID)).toBe(0n);
   });
 
@@ -423,6 +467,24 @@ describe("rine_fulfill (payee)", () => {
 
     expect(out).toContain("status: facilitator-error");
     // No receipt was sent — the payer's thread stays open for a retry.
+    expect(reply.body().type).toBeUndefined();
+  });
+
+  it("sender-unverifiable: a payment whose sender key cannot be read settles nothing and sends no receipt", async () => {
+    await routeIncoming(PAYMENT_ID, "rine.v1.x402_payment", paymentPayload());
+    await routeOwnQuote();
+    const reply = routeReply(PAYMENT_ID);
+    h.route("GET", new RegExp(`^/agents/${PEER_AGENT_ID}/keys$`), () => ({
+      status: 500,
+      json: { error: "key lookup down" },
+    }));
+
+    const out = await runTool(fulfillTool(), { messageId: PAYMENT_ID }, h);
+
+    expect(out).toContain("status: sender-unverifiable");
+    // Nothing reached the facilitator and no receipt was sent: the payer's
+    // thread stays open for a retry.
+    expect(h.requests.some((r) => r.path === "/verify")).toBe(false);
     expect(reply.body().type).toBeUndefined();
   });
 

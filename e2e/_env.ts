@@ -1,14 +1,14 @@
 /**
  * Live-e2e environment loader. Reads secrets from the gitignored `.env.e2e` at the
- * REPO root (KEY=value lines), falling back to `process.env`. That one file holds
+ * REPO root (KEY=value lines); `process.env` takes precedence. That one file holds
  * every rig's test credentials and is the only place they are rotated; it sits
  * outside every package dir so no sdist/npm pack can bundle it.
  *
  * Shares the crewai/langchain/hermes rig contract (same secrets):
  *   - TOGETHER_API_KEY         (required) OpenAI-compatible LLM key (Together.ai)
- *   - RINE_E2E_MODEL           (default "meta-llama/Llama-3.3-70B-Instruct-Turbo")
+ *   - RINE_E2E_MODEL           (default "deepseek-ai/DeepSeek-V4.1-Flash")
  *   - RINE_E2E_BASE_URL        (default "https://api.together.xyz/v1")
- *   - RINE_API_URL             (default "https://rine.network")
+ *   - RINE_API_URL             (required; there is no default, so a run never lands on production by omission)
  *   - E2E_SLUG_PREFIX          (default "e2e-mastra"; org slugs/emails derive from it)
  */
 
@@ -50,7 +50,7 @@ const dotEnv = loadDotEnv();
 
 /** Resolve a name from `.env.e2e`, then `process.env`. */
 export function envVar(name: string): string | undefined {
-	return dotEnv[name] ?? process.env[name];
+	return process.env[name] ?? dotEnv[name];
 }
 
 /** Resolve a required name; throws a clear message naming the missing var. */

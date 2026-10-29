@@ -21,9 +21,30 @@ import {
 	type MlsAdmissionResult,
 	RineApiError,
 	VoteEligibility,
+	type VoteEligibilityFallbacks,
+	describeVoteEligibility,
 	rineErrorCode,
 } from "@rine-network/sdk";
 import type { JoinRequestRead, VoteResponse } from "./types.js";
+
+/**
+ * What this package prints where the server's answer leaves the eligibility
+ * clause a gap. The clauses themselves are core's, shared with the CLI and the
+ * Python twin.
+ *
+ * An unrecognised reason prints itself rather than being read as one of the
+ * known ones: this package can predate a reason the server has learned, and
+ * guessing "you can vote" for one it has never seen is the surprise the whole
+ * model exists to remove. A MISSING one is a row that never went through the
+ * SDK's parse, where the schema default supplies the pre-electorate rule — say
+ * so rather than printing `undefined` at a model, and never guess "you can
+ * vote".
+ */
+const ELIGIBILITY_FALLBACKS: VoteEligibilityFallbacks = {
+	unnamedVote: "—",
+	unknownReason: (reason) =>
+		reason ? `eligibility \`${reason}\`` : "eligibility not reported",
+};
 
 /**
  * What the reading agent's own standing on one request is, in a clause.
@@ -32,39 +53,13 @@ import type { JoinRequestRead, VoteResponse } from "./types.js";
  * call to learn it cannot vote. The reason the server sends predicts the status
  * the vote route answers one-to-one, so the clause and the refusal agree by
  * construction rather than by two surfaces being kept in step.
- *
- * An unrecognised reason prints itself rather than being read as one of these:
- * this package can predate a reason the server has learned, and guessing "you
- * can vote" for one it has never seen is the surprise the whole model exists to
- * remove.
  */
 function eligibilityClause(r: JoinRequestRead): string {
-	switch (r.you_may_vote_reason) {
-		case VoteEligibility.InElectorate:
-			return "you can vote";
-		case VoteEligibility.NotRecorded:
-			return "you can vote (filed before the electorate was recorded; any member may)";
-		case VoteEligibility.NotInElectorate:
-			return "you cannot vote: you were not in the group when this was filed";
-		case VoteEligibility.ElectorateEmpty:
-			return "nobody eligible is still in the group";
-		case VoteEligibility.BarUnreachable:
-			return "nobody can decide this request";
-		case VoteEligibility.IsApplicant:
-			return "this is your own request";
-		case VoteEligibility.AlreadyVoted:
-			return `you already voted ${r.your_vote ?? "—"}`;
-		case VoteEligibility.NotPending:
-			return "not open for voting";
-		default:
-			// A reason this package has never seen prints itself. A MISSING one is
-			// a row that never went through the SDK's parse, where the schema
-			// default supplies the pre-electorate rule — say so rather than
-			// printing `undefined` at a model, and never guess "you can vote".
-			return r.you_may_vote_reason
-				? `eligibility \`${r.you_may_vote_reason}\``
-				: "eligibility not reported";
-	}
+	return describeVoteEligibility(
+		r.you_may_vote_reason,
+		r.your_vote,
+		ELIGIBILITY_FALLBACKS,
+	);
 }
 
 /**

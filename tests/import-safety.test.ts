@@ -48,7 +48,7 @@ describe("side-effect-free import (subprocess, network shimmed to throw)", () =>
 			// just networking. Trip on any fs access that smells like config/creds.
 			const fsBoom = (orig) => (p, ...rest) => {
 				const s = String(p);
-				if (/credentials\\.json|\\.rine|\\.config[\\\\/]+rine/.test(s)) {
+				if (/profiles\\.json|root\\.key|\\.rine|\\.config[\\\\/]+rine/.test(s)) {
 					throw new Error("IMPORT SIDE EFFECT: credential/config fs access at import: " + s);
 				}
 				return orig(p, ...rest);
