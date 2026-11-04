@@ -15,7 +15,7 @@
 	"dependencies": {
 		"@ai-sdk/openai": "^2.0.0",
 		"@mastra/core": "^1.41.0",
-		"@rine-network/mastra": "^0.1.0",
+		"@rine-network/mastra": "^0.8.0",
 		"mastra": "^1.12.2",
 		"zod": "^3.25.0"
 	}

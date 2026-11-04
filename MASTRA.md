@@ -7,8 +7,8 @@
 > `inputSchema` → one `AsyncRineClient` method → a human-readable string. The SDK owns all crypto
 > (HPKE, **MLS**, **PQ-hybrid**), HTTP, config resolution, retries, and types — never reimplement them.
 >
-> Node `>=22.13.0` · single peer `zod` (`>=3.25.0 || >=4.0.0`) · License EUPL-1.2 ·
-> repo `codeberg.org/rine/rine-mastra`.
+> Node `>=22.13.0` · peers `@mastra/core` (`>=1.0.0 <2.0.0`) and `zod` (`>=3.25.0 || >=4.0.0`) · License EUPL-1.2 ·
+> repository `codeberg.org/rine/rine-mastra`.
 
 ## Wire it in one shot
 
@@ -65,7 +65,7 @@ A runnable `create-mastra`-layout app lives in `examples/mastra-agent/` (`src/ma
 whole app). After `npm install` and `cp .env.example .env` (fill `OPENAI_API_KEY` + `RINE_CONFIG_DIR`):
 
 ```bash
-npx @rine-network/mastra onboard --email you@example.com --slug my-org --name "My Org" --config-dir ./.rine
+npx @rine-network/mastra@latest onboard --email you@example.com --slug my-org --name "My Org" --config-dir ./.rine
 npx mastra dev   # Mastra Studio on http://localhost:4111
 ```
 
@@ -85,15 +85,15 @@ MLS group called incident-room"* → `rine_group_create`. **Studio gotcha:** an 
 | `rine_thread` | The both-sided, decrypted transcript of one conversation or one group, oldest turn first. Name `group` (its handle, its name, or its UUID) or `conversationId` — exactly one of the two. A group's transcript starts where the reading agent was seated. |
 | `rine_discover` | Search the public agent directory (q/category/language/verified/limit). Unauthenticated. |
 | `rine_inspect` | Fetch one agent's full public profile by handle (WebFinger-resolved) or UUID. Unauthenticated. |
-| `rine_discover_groups` | Search the public group directory by name or topic. Returns handles, enrollment policies and member counts for `public`-visibility groups across every org — never a private group, and never any group's members. Unauthenticated. |
+| `rine_discover_groups` | Search the public group directory by name or topic. Returns handles, enrolment policies and member counts for `public`-visibility groups across every org — never a private group, and never any group's members. Unauthenticated. |
 | `rine_whoami` | Show this agent's own org name and slug, trust tier, and every live agent handle in the org. |
-| `rine_groups` | List the groups your key can see (an org key's: every group the org's agents are seated in; an agent key's: its own seats), with each group's handle, enrollment policy, encryption mode, member count and `conversation_id`. Each row's `your agents` clause names by handle which of your agents are seated in that group: look for the acting agent's own handle there before posting, because an empty clause means none of them is and a send into that group would be refused. To read what the group has been saying since the reading agent joined, name the group to `rine_thread` — its handle or its id; a row's `conversation_id` works too, and is `null` until someone posts. |
+| `rine_groups` | List the groups your key can see (an org key's: every group the org's agents are seated in; an agent key's: its own seats), with each group's handle, enrolment policy, encryption mode, member count and `conversation_id`. Each row's `your agents` clause names by handle which of your agents are seated in that group: look for the acting agent's own handle there before posting, because an empty clause means none of them is and a send into that group would be refused. To read what the group has been saying since the reading agent joined, name the group to `rine_thread` — its handle or its id; a row's `conversation_id` works too, and is `null` until someone posts. |
 | `rine_group_create` | Create a coordination group — **MLS-encrypted (RFC 9420) by default** (`enableMls` default true). `members` invites a roster as the group is founded: under `closed`, `majority` and `unanimity` that roster mints real invitations — including the agents whose invites would otherwise be nominations — because at founding the creator is the only member. On `open` a roster mints nothing; enrolment there is the join itself. **Mutating.** |
 | `rine_group_invite` | Invite one agent, or several at once, into a group your agent belongs to (handles or UUIDs). On a closed group the SDK adds every invitee to the MLS group in one commit; on a majority or unanimity group each outcome is a nomination the electorate decides, not a seat. **Mutating.** |
 | `rine_group_remove` | Remove a member; they are dropped from the roster and from group fan-out. **Mutating.** |
-| `rine_group_inspect` | Show a group's E2EE mode (MLS vs sender-key) and enrollment policy so you can tell how a group is run before posting to it. It covers the groups your key can see (an org key's: every group the org's agents are seated in), and its `your agents` line names by handle which of them hold a seat in this one. It reports what KIND of group it is; `rine_group_roster` reports who is in it. |
+| `rine_group_inspect` | Show a group's E2EE mode (MLS vs sender-key) and enrolment policy so you can tell how a group is run before posting to it. It covers the groups your key can see (an org key's: every group the org's agents are seated in), and its `your agents` line names by handle which of them hold a seat in this one. It reports what KIND of group it is; `rine_group_roster` reports who is in it. |
 | `rine_group_roster` | List a group's members with their handles, roles (admin/member), and join dates. Your own org's members are marked `(yours)`, and every other member is still listed. Members only — an invitation or a nomination holds a seat without being one, and `rine_group_requests` is what lists those. |
-| `rine_group_join` | Join a group by its handle or its id: accept a pending invite, or join an open-enrollment group found in the public directory. The handle resolves through this agent's own seats, its invitations, your org's open and voted groups, then the directory; a bare name reaches only a group that has already invited this agent. **Mutating.** |
+| `rine_group_join` | Join a group by its handle or its id: accept a pending invite, or join an open-enrolment group found in the public directory. The handle resolves through this agent's own seats, its invitations, your org's open and voted groups, then the directory; a bare name reaches only a group that has already invited this agent. **Mutating.** |
 | `rine_group_invites` | List the invitations and nominations addressed to your agent, told apart by status. |
 | `rine_group_requests` | List a group's outstanding admissions: the vote queue (`pending`), the unaccepted invitations (`invited`), or both (`live`). Members plus `live` is the whole ratchet tree the seat ceiling counts. |
 | `rine_group_vote` | Approve or deny one pending join request. A request is decided by the members the group had when it was filed, and only by those of them still in it: majority needs more than half of them, unanimity all of them, and an agent who joined afterwards does not vote on it. Denials refuse it on that same electorate — half of them under majority, a single one under unanimity — so both bars fall as members leave. An approve that crosses the group's threshold seats the applicant, and on an MLS group mints their ratchet-tree leaf and Welcome as part of the vote. **Mutating.** |
@@ -119,7 +119,7 @@ The TS SDK decrypts **all** rine encryption modes — `hpke-hybrid-v2` (PQ X2551
 - `[OK] sender-key group — readable/postable from here.`
 - `[OK] sender-key group — readable/postable from here. This group was created to run MLS, but its ratchet tree was never founded, so its messages are sealed with sender keys rather than the MLS it was created for. No verb on this surface founds it: a member has to found the group's MLS state.`
 
-Every one of those is a working group. Sender-key is the broadcast path open-enrollment groups run
+Every one of those is a working group. Sender-key is the broadcast path open-enrolment groups run
 on, and every rine stack reads and posts MLS groups on the shared engine.
 
 The fourth line is a closed group created to run MLS whose ratchet tree was never founded
@@ -138,17 +138,17 @@ state — and `rine_group_sync` installs that group's waiting sender keys and wa
   `outputSchema` is `z.string()`, and `rine_read` / `rine_inbox` / `rine_thread` add a `toModelOutput` redactor
   as belt-and-suspenders. The idle-wake `resumeData` is plaintext + signature facts only.
 - **Errors come back as strings.** No tool throws. Every failure comes back as a readable `formatError`
-  string (auth / not-authorized / not-found / rate-limit / validation / timeout / crypto / connection /
+  string (auth / not-authorised / not-found / rate-limit / validation / timeout / crypto / connection /
   API). Treat a tool result that starts with `Rine auth failed`, `Not found:`, `Rate-limited`, or
   `Invalid input:` as an actionable signal, not as message content.
 
 ## Imperatives — the rules that matter
 
-1. **The agent runtime dir is the whole identity.**
+1. **The agent runtime directory is the whole identity.**
    There is no client secret and `RINE_CLIENT_*` is ignored: the agent authenticates with a signed
    assertion from the leaf keys on disk at `configDir/keys/<agent>/`, selected by `profiles.json`
    (written by `onboard` / `createAgent` / `rotateKeys`). The org root key and recovery phrase live in
-   a separate owner dir (`RINE_OWNER_DIR`, default `~/.config/rine-owner`), never in `RINE_CONFIG_DIR`.
+   a separate owner directory (`RINE_OWNER_DIR`, default `~/.config/rine-owner`), never in `RINE_CONFIG_DIR`.
    There is **no `RINE_TOKEN`** env knob — do not look for one.
 
 2. **Plaintext is a JSON string `{"text": …}`.** Every send wraps the body as `{ text: body }`; the
@@ -162,8 +162,8 @@ state — and `rine_group_sync` installs that group's waiting sender keys and wa
    the server's MLS latch, and the only field that says a group has MLS state) and
    `groupMlsInitInFlight(g)` (the window between the MLS-init call and that latch, during which sends
    already go out as MLS). A group that matches neither is a sender-key group, which is what
-   open-enrollment groups run on. **Never read `mls_enabled`** to answer this: it is an intent flag a
-   closed group carries from birth and an open-enrollment group carries while running on sender keys,
+   open-enrolment groups run on. **Never read `mls_enabled`** to answer this: it is an intent flag a
+   closed group carries from birth and an open-enrolment group carries while running on sender keys,
    so reading it labels sender-key groups MLS. Do **not** rely on the `EncryptionVersion` const-enum to
    detect MLS/PQ either — it is MISSING `mls-v1` even though the SDK decrypts them.
    `rine_group_inspect` already applies these predicates; mirror them in any custom code.
@@ -179,9 +179,9 @@ state — and `rine_group_sync` installs that group's waiting sender keys and wa
    group message. To answer a group message, post a FRESH message with `rine_send` to the group handle
    (`#logistics@acme.rine.network`) — the SDK re-encrypts it `mls-v1`. 1:1 messages thread fine through `rine_reply`.
 
-6. **ONBOARD ONCE for keys — it is NOT a tool.** A ~30–60 s RSA proof-of-work does not belong in an LLM
+6. **ONBOARD ONCE for keys — it is NOT a tool.** The RSA proof-of-work takes a while and does not belong in an LLM
    turn. Run it out-of-band at setup time:
-   `npx @rine-network/mastra onboard --email you@example.com --slug my-org --name "My Org" [--agent-name worker] [--config-dir ./.rine]`.
+   `npx @rine-network/mastra@latest onboard --email you@example.com --slug my-org --name "My Org" [--agent-name worker] [--config-dir ./.rine]`.
    `--name` is the ORG display name; the first agent's handle local-part is **derived from it**
    (lowercased, non-alphanumerics folded to hyphens) unless you set it explicitly with
    `--agent-name <handle>`. An agent name must be **1–200 lowercase alphanumeric chars with interior
@@ -233,7 +233,7 @@ const cb = rineLifecycle({ to: "ops@acme", on: ["finish", "error"] }); // select
 await rineAgent.stream(input, { ...cb });   // or .generate(input, { ...cb })
 ```
 
-Each fired callback attempts EXACTLY ONE `client.send`, summarizing only the model-visible
+Each fired callback attempts EXACTLY ONE `client.send`, summarising only the model-visible
 text / tool name / error message (truncated at 500 chars) — never ciphertext.
 
 ## Receiving while idle
@@ -298,11 +298,12 @@ The pitfalls (rules):
   conversation, resume threw) records the message's **id**, and a bounded retry re-reads that message
   by id and re-attempts the resume: **5 attempts per message, 50 per sweep, one sweep every 5 minutes,
   500 messages kept**. `PollDriver` runs the retry on that interval and at the tail of each message;
-  `makeWebhookHandler` runs it at the tail of each delivery. Nothing here acks, on any path.
-  The record is what makes a skip recoverable, and it is not optional bookkeeping: the server marks a
-  streamed frame delivered **as it yields it**, so a message this resumer skips has already left
-  `status:"new"`, `rine_inbox` and the SSE catch-up — a `GET` for its id is the only way to see it
-  again. The re-read peeks, so a row that is still `new` (the webhook case) is not consumed by its own
+  `makeWebhookHandler` runs it at the tail of each delivery. The retry acknowledges a row only
+  once it has resumed a run for it.
+  The record is what makes a skip recoverable, and it is not optional bookkeeping: the default SSE
+  driver acknowledges a message it has opened before the resumer sees it, so a message this resumer
+  skips has already left `status:"new"`, `rine_inbox` and the SSE catch-up — a `GET` for its id is
+  the only way to see it again. The re-read peeks, so a row that is still `new` (the webhook case) is not consumed by its own
   rescue, and a group message whose sender key arrived late gets a `groups.sync` before the re-read.
 - **Keep the parked ids across a restart.** The default store is per-process, so a restart forgets
   what it parked — and the messages it forgets are already gone from the inbox. Pass
@@ -337,7 +338,7 @@ const mcp = new MCPClient({
   servers: {
     rine: {
       command: "npx",
-      args: ["-y", "@rine-network/mcp"],
+      args: ["-y", "@rine-network/mcp@latest"],
       env: { RINE_CONFIG_DIR: process.env.RINE_CONFIG_DIR! },
       timeout: 300_000, // ⚠ raise from the 60_000ms default or a 300s send_and_wait is killed
     },

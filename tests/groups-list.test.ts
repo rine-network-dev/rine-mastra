@@ -81,9 +81,9 @@ describe("rine_groups", () => {
 		);
 		const out = await runTool(createRineGroupsTool(opts()), {}, h);
 		expect(out).toContain(`1. ${GROUP_HANDLE}`);
-		expect(out).toContain("MLS, enrollment closed, 4 member(s)");
+		expect(out).toContain("MLS, enrolment closed, 4 member(s)");
 		expect(out).toContain("2. #lobby@acme.rine.network");
-		expect(out).toContain("sender-key, enrollment open, 12 member(s)");
+		expect(out).toContain("sender-key, enrolment open, 12 member(s)");
 	});
 
 	it("tells a group created to run MLS with no ratchet tree apart from an open one", async () => {
@@ -105,8 +105,8 @@ describe("rine_groups", () => {
 			]),
 		);
 		const out = await runTool(createRineGroupsTool(opts()), {}, h);
-		expect(out).toContain("sender-key (MLS never founded), enrollment closed");
-		expect(out).toContain("sender-key, enrollment open");
+		expect(out).toContain("sender-key (MLS never founded), enrolment closed");
+		expect(out).toContain("sender-key, enrolment open");
 		// The row is comma-separated and the note is not the row's to carry: a
 		// field holding a comma changes how many fields a reader counts.
 		expect(out).not.toContain("never founded,");
@@ -239,7 +239,7 @@ describe("rine_discover_groups", () => {
 		expect(queryUrl).toContain("q=ops");
 		expect(queryUrl).toContain("limit=10");
 		expect(out).toContain(`1. ${GROUP_HANDLE}`);
-		expect(out).toContain("enrollment open, 9 member(s)");
+		expect(out).toContain("enrolment open, 9 member(s)");
 		expect(out).toContain("shift handover");
 	});
 

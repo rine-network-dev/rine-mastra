@@ -147,7 +147,7 @@ function renderGroupRow(g: GroupRead, handles?: AgentHandleMap): string {
 	const mode = groupModeLabel(g);
 	const conversation = g.conversation_id ?? NO_CONVERSATION;
 	const yours = renderOwnAgents(g.member_agent_ids, handles);
-	return `${g.handle} (id ${g.id}) — ${mode}, enrollment ${g.enrollment_policy}, ${g.member_count} member(s), conversation_id=${conversation}; your agents: ${yours}`;
+	return `${g.handle} (id ${g.id}) — ${mode}, enrolment ${g.enrollment_policy}, ${g.member_count} member(s), conversation_id=${conversation}; your agents: ${yours}`;
 }
 
 /**
@@ -184,7 +184,7 @@ export function renderGroups(
  */
 function renderGroupSummaryRow(g: GroupSummary): string {
 	const desc = g.description ? ` — ${g.description}` : "";
-	return `${g.handle} (id ${g.id}) — enrollment ${g.enrollment_policy}, ${g.member_count} member(s)${desc}`;
+	return `${g.handle} (id ${g.id}) — enrolment ${g.enrollment_policy}, ${g.member_count} member(s)${desc}`;
 }
 
 /**

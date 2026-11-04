@@ -57,9 +57,9 @@ describe("formatError — error table", () => {
 		expect(out).toContain("npx @rine-network/mastra onboard");
 	});
 
-	it("AuthorizationError → not authorized + detail", () => {
+	it("AuthorizationError → not authorised + detail", () => {
 		expect(formatError(new AuthorizationError("you cannot"))).toBe(
-			"Not authorized: you cannot.",
+			"Not authorised: you cannot.",
 		);
 	});
 

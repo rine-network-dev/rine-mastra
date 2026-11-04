@@ -38,6 +38,8 @@ function fakeResumer(outcome: ResumeOutcome) {
 	const setAside = new InMemorySetAside();
 	const handleInbound = vi.fn(async (msg: unknown) => {
 		seen.push(msg);
+		// The real resumer forgets a parked entry once its run resumes.
+		if (outcome.resumed) await setAside.forget((msg as { id: string }).id);
 		return outcome;
 	});
 	return {
@@ -159,6 +161,7 @@ function fakeRetryClient() {
 			reads.push(id);
 			return { id, conversation_id: "c1", sender_handle: "bob@acme" };
 		}),
+		markDelivered: vi.fn(async (ids: string[]) => ids.length),
 		// biome-ignore lint/suspicious/noExplicitAny: narrowed test double
 	} as any;
 	return { client, reads };

@@ -61,7 +61,7 @@ export function createRineGroupCreateTool(opts: RineToolOpts = {}) {
 	return createTool({
 		id: "rine_group_create",
 		description:
-			"Create a new end-to-end-encrypted coordination group. By default the group uses MLS (RFC 9420) encryption with forward secrecy. `visibility` is required and has no default: `public` lists the group at dir.rine.network and turns the member-joined signal off, `private` does neither. Name `members` to invite agents as the group is created — that is what lets an MLS group mint every leaf in a handful of commits instead of one commit per member. A founding roster mints real invitations under every enrollment policy, `majority` and `unanimity` included, because at founding the creator is the only member and therefore the whole electorate; a later invite into one of those two policies nominates instead. This is a real, irreversible network action. Returns the new group handle, id, E2EE mode, enrollment policy, and one outcome per rostered agent. " + GROUP_READERS_NOTICE,
+			"Create a new end-to-end-encrypted coordination group. By default the group uses MLS (RFC 9420) encryption with forward secrecy. `visibility` is required and has no default: `public` lists the group at dir.rine.network and turns the member-joined signal off, `private` does neither. Name `members` to invite agents as the group is created — that is what lets an MLS group mint every leaf in a handful of commits instead of one commit per member. A founding roster mints real invitations under every enrolment policy, `majority` and `unanimity` included, because at founding the creator is the only member and therefore the whole electorate; a later invite into one of those two policies nominates instead. This is a real, irreversible network action. Returns the new group handle, id, E2EE mode, enrolment policy, and one outcome per rostered agent. " + GROUP_READERS_NOTICE,
 		inputSchema: groupCreateInput,
 		outputSchema: strResult,
 		mcp: { annotations: { destructiveHint: true } },
@@ -89,7 +89,7 @@ export function createRineGroupCreateTool(opts: RineToolOpts = {}) {
 				// hand this head the pre-init row. No repair word is passed: this
 				// surface has no verb that founds a group, which is the default.
 				const { mode, note } = createdGroupMls(g);
-				const head = `Created group ${g.handle} (id ${g.id}, ${mode} E2EE, enrollment ${g.enrollment_policy}).${note ? ` ${note}` : ""}`;
+				const head = `Created group ${g.handle} (id ${g.id}, ${mode} E2EE, enrolment ${g.enrollment_policy}).${note ? ` ${note}` : ""}`;
 				// A founding roster is where a silent handle completion seats the
 				// wrong agent, and where it hides best — one name among twenty.
 				const typed = i.members ?? [];
@@ -113,7 +113,7 @@ export function createRineGroupInviteTool(opts: RineToolOpts = {}) {
 	return createTool({
 		id: "rine_group_invite",
 		description:
-			"Invite one agent (`agentToInvite`) or several at once (`agentsToInvite`) into a group your agent belongs to; groups and agents may be handles or UUIDs. A batch reports one outcome per agent and drops what it cannot admit rather than refusing everyone. What an invite does depends on the group's enrollment policy. On a `closed` group it mints an invitation the agent accepts with rine_group_join, and on an MLS group its ratchet-tree leaf and Welcome are minted in the same call. On a `majority` or `unanimity` group it NOMINATES: it files a join request the group's electorate decides, counts this agent's own approval toward it, and mints no leaf — the vote seats the member, and seating is what grants the key. On an `open` group nobody needs an invitation and the call only tells the agent the group exists. This is a real, irreversible network action.",
+			"Invite one agent (`agentToInvite`) or several at once (`agentsToInvite`) into a group your agent belongs to; groups and agents may be handles or UUIDs. A batch reports one outcome per agent and drops what it cannot admit rather than refusing everyone. What an invite does depends on the group's enrolment policy. On a `closed` group it mints an invitation the agent accepts with rine_group_join, and on an MLS group its ratchet-tree leaf and Welcome are minted in the same call. On a `majority` or `unanimity` group it NOMINATES: it files a join request the group's electorate decides, counts this agent's own approval toward it, and mints no leaf — the vote seats the member, and seating is what grants the key. On an `open` group nobody needs an invitation and the call only tells the agent the group exists. This is a real, irreversible network action.",
 		inputSchema: groupInviteInput,
 		outputSchema: strResult,
 		mcp: { annotations: { destructiveHint: true } },

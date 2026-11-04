@@ -16,14 +16,13 @@
  *
  * 🔴 **Every skip records the message's id** in the {@link SetAsideStore}, and
  * `setaside-sweep.ts` re-reads those ids and re-attempts them under a bound.
- * That record is what makes a skip recoverable, because nothing else does: the
- * default driver is the SSE loop named above, and the rine server marks a
- * streamed frame delivered as it yields it — before any line of this file runs.
- * A skipped message has therefore already left `status=new`, `poll()` and the
- * SSE catch-up by the time it is skipped, so a `GET` for its id is the only way
- * to see those bytes again. Nothing here acknowledges a message on any path,
- * which on the webhook driver — where a row can still be `new` — is what also
- * keeps a skipped message in the inbox listing.
+ * That record is what makes a skip recoverable once the message has been
+ * consumed: the default driver is the SSE loop named above, and it marks a
+ * message it has opened delivered before any line of this file runs. A message
+ * skipped here has therefore already left `status=new`, `poll()` and the SSE
+ * catch-up, so a `GET` for its id is the only way to see those bytes again.
+ * Nothing here acknowledges a message on any path; the driver's stream does
+ * that for what it opens, and the sweep does it for what it later resumes.
  *
  * TRUST NOTE: `verified === true` on an inbound message means the envelope
  * signature checked out AND the signing key it names belongs to the agent the
@@ -178,15 +177,45 @@ export class RineThreadResumer {
 		this.log.debug?.(
 			`[rine] resumed run ${runId} for (${handle}, ${conversation})`,
 		);
+		await this.forgetResumed(msg.id);
 		return { resumed: true, runId };
+	}
+
+	/**
+	 * Drop any set-aside record for a message that has just resumed a run.
+	 *
+	 * The message may have been parked earlier and then come back on a cold
+	 * reconnect, opened this time; without this the sweep would resume the same
+	 * run a second time when it reached the record.
+	 *
+	 * 🔴 Forgotten AFTER the resume, not before it. The other order is the right
+	 * one for a harness that cannot un-say a reply. Here the thing being re-run
+	 * is a workflow resume keyed on a `runId` that is no longer suspended, which
+	 * the `not-suspended` arm skips, and the package's own contract already tells
+	 * a workflow to key its idempotency on `messageId`. So the cheaper failure is
+	 * the duplicate attempt, and what this order buys is that a crash cannot
+	 * silently drop the record of a message that never actually resumed.
+	 *
+	 * A store fault is logged and not raised: the run has resumed, and raising
+	 * would turn that into a failed dispatch.
+	 */
+	private async forgetResumed(id: string): Promise<void> {
+		try {
+			await this.setAside.forget(id);
+		} catch (err) {
+			this.log.warn?.(
+				`[rine] resumed message ${id} but could not clear its set-aside record:`,
+				err,
+			);
+		}
 	}
 
 	/**
 	 * Record one skipped message's id, then report the skip.
 	 *
 	 * Best-effort, and the one failure here that really does lose a message says
-	 * so: the stream has already consumed the row, so an id never written down
-	 * leaves nothing to retry and nothing to name. It must not propagate — a
+	 * so: the stream has already acknowledged a row it opened, so an id never
+	 * written down leaves nothing to retry and nothing to name. It must not propagate — a
 	 * store fault would otherwise turn a skipped message into a crashed dispatch.
 	 *
 	 * 🔴 The reason goes through `sightingOf`, which splits `decrypt-failed` into

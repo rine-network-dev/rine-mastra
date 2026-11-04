@@ -41,7 +41,7 @@ describe("renderAdmission — the invitation, per agent", () => {
 			entries: [{ agent_id: ANA, status: "skipped", reason: "not_applicable" }],
 		});
 
-		expect(out).toContain("open enrollment");
+		expect(out).toContain("open enrolment");
 		expect(out).toContain("may join whenever it likes");
 		expect(out).not.toContain("(not_applicable)");
 	});

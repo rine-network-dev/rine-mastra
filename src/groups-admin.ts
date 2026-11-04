@@ -75,7 +75,7 @@ export function createRineGroupVoteTool(opts: RineToolOpts = {}) {
 					return renderVote(i.group, result);
 				} catch (err) {
 					// The electorate refusals are the only ones this tool answers
-					// itself: a bare "Not authorized" would leave the model retrying a
+					// itself: a bare "Not authorised" would leave the model retrying a
 					// call whose outcome cannot change. Everything else is
 					// `formatError`'s.
 					const refusal = renderVoteRefusal(i.group, err);

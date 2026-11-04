@@ -13,7 +13,7 @@
 
 import { createTool } from "@mastra/core/tools";
 import { THREAD_REF_SURFACES, resolveThreadRef } from "@rine-network/core";
-import { asMessageUuid } from "@rine-network/sdk";
+import { asMessageUuid, isSettled } from "@rine-network/sdk";
 import { strResult, type z } from "./_zod.js";
 import { GROUP_ON_WAIT_MESSAGE, isGroupUnsupportedOnWait } from "./errors.js";
 import {
@@ -103,7 +103,7 @@ export function createRineInboxTool(opts: RineToolOpts = {}) {
 	return createTool({
 		id: "rine_inbox",
 		description:
-			'Fetch and decrypt messages from your inbox (1:1 and group). Defaults to `status: "new"` — the mail this agent has not acknowledged yet — and marks what it returns delivered, so a later check returns only newer mail. `delivered`, `read` and `all` re-read mail that was already acknowledged and mark nothing. Returns a numbered list of decrypted messages, or \'No new messages.\' when nothing matched.',
+			'Fetch and decrypt messages from your inbox (1:1 and group). Defaults to `status: "new"` — the mail this agent has not acknowledged yet — and marks delivered only the messages it settled (opened, sent in cleartext, or refused for a failed sender signature, which never heals), so a later check returns only newer mail. A message it could not decrypt stays `new` and is returned again with its decrypt error. `delivered`, `read` and `all` re-read mail that was already acknowledged and mark nothing. Returns a numbered list of decrypted messages, or \'No new messages.\' when nothing matched.',
 		inputSchema: inboxInput,
 		outputSchema: strResult,
 		// Belt-and-suspenders ciphertext redactor: the last of the three
@@ -132,15 +132,14 @@ export function createRineInboxTool(opts: RineToolOpts = {}) {
 				// and acking there would consume messages the caller asked only to see.
 				if (status !== "new") return rendered;
 
-				// Ack only the messages we could actually decrypt; a broken envelope
+				// Ack only the messages that settled: opened, cleartext, or refused for
+				// a failed sender signature (which never heals). A broken envelope
 				// stays "new" so a future poll can retry after key recovery.
-				const decryptableIds = items
-					.filter((m) => !m.decrypt_error)
-					.map((m) => m.id);
-				if (decryptableIds.length === 0) return rendered;
+				const settledIds = items.filter(isSettled).map((m) => m.id);
+				if (settledIds.length === 0) return rendered;
 
 				try {
-					await client.markDelivered(decryptableIds);
+					await client.markDelivered(settledIds);
 					return rendered;
 				} catch {
 					return `${rendered}\n[WARN] could not mark messages delivered; they may reappear on the next check.`;

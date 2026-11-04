@@ -116,7 +116,7 @@ describe("rine_group_create (enableMls)", () => {
 		// enableMls latched → the result advertises MLS E2EE.
 		expect(out).toContain(`Created group ${GROUP_HANDLE}`);
 		expect(out).toContain("MLS E2EE");
-		expect(out).toContain("enrollment closed");
+		expect(out).toContain("enrolment closed");
 		// The create body did NOT carry enableMls=false (default-on honored).
 		expect(createBody).toMatchObject({ name: "Ops", visibility: "private" });
 	});
@@ -466,7 +466,7 @@ describe("rine_group_invite (handle→UUID pre-resolution)", () => {
 		);
 	});
 
-	it("a 403 on invite resolves to the not-authorized string", async () => {
+	it("a 403 on invite resolves to the not-authorised string", async () => {
 		h.route("GET", /^\/groups$/, () => ({
 			json: {
 				items: [groupJson()],
@@ -493,7 +493,7 @@ describe("rine_group_invite (handle→UUID pre-resolution)", () => {
 			{ group: GROUP_ID, agentToInvite: PEER_AGENT_ID },
 			h,
 		);
-		expect(out).toBe("Not authorized: not an admin.");
+		expect(out).toBe("Not authorised: not an admin.");
 	});
 });
 

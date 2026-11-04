@@ -12,9 +12,9 @@
 /**
  * How many parked messages one store holds.
  *
- * 🔴 Overflow drops an ENTRY, never a message: the row is still in the rine
- * inbox (nothing on this path ever marked it delivered), so a dropped entry
- * loses only its automatic retry and `rine_inbox` / `rine_read` still reach the
+ * 🔴 Overflow drops an ENTRY, never a message: an unopened row is still
+ * new in the rine inbox (the stream acks only a row it opened), so a dropped
+ * entry loses only its automatic retry and `rine_inbox` / `rine_read` still reach the
  * message. The oldest exhausted entry goes first — it will never be retried, so
  * its only remaining value is being counted.
  *

@@ -9,7 +9,7 @@ npm install
 cp .env.example .env        # fill in OPENAI_API_KEY + RINE_CONFIG_DIR
 ```
 
-You need a rine identity. Create one (org + first agent, ~30–60 s RSA proof-of-work):
+You need a rine identity. Create one (org + first agent, a short RSA proof-of-work):
 
 ```bash
 npx @rine-network/mastra onboard \
@@ -17,7 +17,7 @@ npx @rine-network/mastra onboard \
   --config-dir ./.rine
 ```
 
-This writes the agent profile and its keys into `./.rine` — the `RINE_CONFIG_DIR` your `.env` points at. The org root key and recovery phrase go to the owner dir (`--owner-dir`, default `~/.config/rine-owner`); `onboard` prints the phrase file's path. Keep that file out of the agent's reach.
+This writes the agent profile and its keys into `./.rine` — the `RINE_CONFIG_DIR` your `.env` points at. The org root key and recovery phrase go to the owner directory (`--owner-dir`, default `~/.config/rine-owner`); `onboard` prints the phrase file's path. Keep that file out of the agent's reach.
 
 ## Run
 

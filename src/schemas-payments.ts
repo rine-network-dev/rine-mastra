@@ -23,13 +23,13 @@ export const payInput = z.object({
 	messageId: z
 		.string()
 		.describe(
-			"UUID of the received `rine.v1.x402_payment_required` quote to pay. The tool decrypts it, selects an acceptable requirement under the agent's local spend policy (deny-by-default), signs an EIP-3009 stablecoin authorization with the agent's wallet, and sends the signed payment back IN-THREAD.",
+			"UUID of the received `rine.v1.x402_payment_required` quote to pay. The tool decrypts it, selects an acceptable requirement under the agent's local spend policy (deny-by-default), signs an EIP-3009 stablecoin authorisation with the agent's wallet, and sends the signed payment back IN-THREAD.",
 		),
 	autoPay: z
 		.boolean()
 		.optional()
 		.describe(
-			"If true, pay ONLY when the quote is at/below the policy's autoPayThreshold; otherwise return `above-auto-pay-threshold` without paying. Default follows the toolkit's `payments.autoPay` config (default false — an explicit pay call is the authorization, still bounded by the hard spend caps).",
+			"If true, pay ONLY when the quote is at/below the policy's autoPayThreshold; otherwise return `above-auto-pay-threshold` without paying. Default follows the toolkit's `payments.autoPay` config (default false — an explicit pay call is the authorisation, still bounded by the hard spend caps).",
 		),
 	emitMarker: z
 		.boolean()
@@ -53,7 +53,7 @@ export const fulfillInput = z.object({
 	messageId: z
 		.string()
 		.describe(
-			"UUID of the received `rine.v1.x402_payment` message to fulfill. The tool verifies the signed authorization with the configured facilitator, settles it on-chain (settle-first), and sends the settlement receipt back IN-THREAD. A failed verification skips settlement and sends a failure receipt so the payer's thread reaches a terminal state.",
+			"UUID of the received `rine.v1.x402_payment` message to fulfil. The tool verifies the signed authorisation with the configured facilitator, settles it on-chain (settle-first), and sends the settlement receipt back IN-THREAD. A failed verification skips settlement and sends a failure receipt so the payer's thread reaches a terminal state.",
 		),
 	facilitator: z
 		.string()

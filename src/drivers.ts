@@ -76,11 +76,13 @@ export class PollDriver {
 		if (this.agent) return;
 		const client = getRineClient(this.clientOpts);
 		this.lifetime = new AbortController();
-		// 🔴 The server marks a streamed frame delivered as it yields it, so a
-		// message this loop skips is already consumed. The resumer records its id
-		// and this is what retries it: on the interval, and at the tail of each
-		// message, which is when a sender key that seals a parked group message is
-		// most likely to have just arrived.
+		// 🔴 The stream acknowledges a message it has opened before `onMessage`
+		// runs, so a message the resumer skips (no run mapped yet, say) is already
+		// consumed. The resumer records its id and this is what retries it: on the
+		// interval, and at the tail of each message, which is when a sender key
+		// that seals a parked group message is most likely to have just arrived.
+		// A message the stream could not open stays `new`; the sweep marks it
+		// delivered once it resumes a run.
 		const sweep = startSweepSchedule({
 			client,
 			resumer: this.resumer,

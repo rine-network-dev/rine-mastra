@@ -1,8 +1,8 @@
 /**
  * The durable {@link SetAsideStore}: one libsql table of the inbound messages a
  * resume could not use. A file URL is what makes a parked message answerable
- * after a restart — the in-memory store forgets it, and the message it forgets
- * was already consumed off the stream.
+ * after a restart — the in-memory store forgets it, and a message it forgets
+ * may already have been acknowledged off the stream.
  *
  * It can share the database `SqliteThreadMap` uses, which keeps this package's
  * durable state one artefact to back up or delete. Build it where the driver is

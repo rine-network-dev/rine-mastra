@@ -606,7 +606,7 @@ describe("rine_group_vote refuses in words a model can act on", () => {
 		expect(out).toContain("you were not one of them");
 		expect(out).toContain("Retrying will not help");
 		// Never the bare authorization line: that reads as a fixable permission.
-		expect(out).not.toContain("Not authorized");
+		expect(out).not.toContain("Not authorised");
 	});
 
 	it("says an emptied electorate leaves the request to its expiry", async () => {
@@ -622,7 +622,7 @@ describe("rine_group_vote refuses in words a model can act on", () => {
 	// The refusal half of the same case. `SelfRequestVoteError` carries
 	// `is_applicant`, and it is reachable exactly when an applicant was seated by
 	// some other route while its own request still stands — an ordinary shape. A
-	// bare "Not authorized" would read as a permission an operator can grant.
+	// bare "Not authorised" would read as a permission an operator can grant.
 	it("says an agent cannot decide the request it is the subject of", async () => {
 		const out = await refused(403, {
 			error: "is_applicant",
@@ -632,7 +632,7 @@ describe("rine_group_vote refuses in words a model can act on", () => {
 		expect(out).toContain(`No vote was recorded in \`${GROUP_ID}\``);
 		expect(out).toContain("This is your own join request");
 		expect(out).toContain("Retrying will not help");
-		expect(out).not.toContain("Not authorized");
+		expect(out).not.toContain("Not authorised");
 	});
 
 	it("leaves every other refusal to the shared error formatter", async () => {
@@ -643,7 +643,7 @@ describe("rine_group_vote refuses in words a model can act on", () => {
 		// strings here would make the fake state a product fact it does not own,
 		// and would go stale the next time the server rewords it.
 		const out = await refused(403, { detail: "stand-in refusal" });
-		expect(out).toBe("Not authorized: stand-in refusal.");
+		expect(out).toBe("Not authorised: stand-in refusal.");
 	});
 });
 

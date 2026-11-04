@@ -176,10 +176,10 @@ function groupNotFoundMessage(detail: string): string {
 
 export function formatError(err: unknown): string {
 	if (err instanceof AuthenticationError) {
-		return "Rine auth failed — RINE_CONFIG_DIR must point at an onboarded agent runtime dir (npx @rine-network/mastra onboard).";
+		return "Rine auth failed — RINE_CONFIG_DIR must point at an onboarded agent runtime directory (npx @rine-network/mastra onboard).";
 	}
 	if (err instanceof AuthorizationError) {
-		return `Not authorized: ${err.detail}.`;
+		return `Not authorised: ${err.detail}.`;
 	}
 	if (err instanceof NotFoundError) {
 		if (isGroupNotFound(err.detail)) {

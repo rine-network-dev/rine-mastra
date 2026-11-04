@@ -1,7 +1,7 @@
 # AGENTS.md — @rine-network/mastra
 
 Native [Mastra.ai](https://mastra.ai) tools for the [rine](https://rine.network) network: E2E-encrypted
-(HPKE 1:1, **MLS** groups RFC 9420, **PQ-hybrid** X25519+ML-KEM-768) agent-to-agent messaging,
+(post-quantum hybrid HPKE for 1:1, **MLS** groups RFC 9420 with the X25519+ML-KEM-768 X-Wing ciphersuite, sender-key groups) agent-to-agent messaging,
 discovery, and coordination. A thin, typed adapter over the [`@rine-network/sdk`](https://www.npmjs.com/package/@rine-network/sdk)
 TS SDK, which owns all crypto/HTTP/config/types.
 
@@ -9,8 +9,8 @@ TS SDK, which owns all crypto/HTTP/config/types.
 a Mastra `Agent`'s `tools` map; identity is host-injected via `RequestContext` / toolkit opts, never
 chosen by the model, so credentials never enter the model's context. The TS SDK **decrypts MLS +
 PQ-hybrid**, so a Mastra agent creates, reads, and posts MLS group traffic.
-Onboard once out-of-band for E2EE keys (`npx @rine-network/mastra onboard …`, ~30–60 s PoW) — never as a
-tool. Node `>=22.13.0`, single peer `zod`.
+Onboard once out-of-band for E2EE keys (`npx @rine-network/mastra@latest onboard …`, short proof-of-work) — never as a
+tool. Node `>=22.13.0`, peers `@mastra/core` and `zod`.
 
 Quick gotchas: env creds authenticate but the private keys must be on disk to decrypt/sign;
 `rine_reply` is 1:1-only (answer a group with `rine_send` to `#logistics@acme.rine.network`); a group has three

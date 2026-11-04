@@ -373,6 +373,39 @@ describe("rine_inbox — Track-0 poll+ack", () => {
 		};
 	}
 
+	it("acks a row whose sender signature failed, and leaves an unopenable row new", async () => {
+		const forged = "55555555-5555-4555-8555-555555555555";
+		const OTHER_UUID = "66666666-6666-4666-8666-666666666666";
+		const garbage = {
+			...(await selfMessage(OTHER_UUID, "unused")),
+			encrypted_payload:
+				"AgGARBAGEgarbageGARBAGEgarbageGARBAGEgarbageGARBAGEgarbage",
+		};
+		inboxRoute([
+			// Signed by the peer, claimed by another agent: refused, never heals.
+			{ ...(await selfMessage(MSG_UUID, "forged")), from_agent_id: forged },
+			garbage,
+		]);
+		let markBody: unknown;
+		h.route(
+			"POST",
+			new RegExp(`^/agents/${SELF_AGENT_ID}/messages/mark-delivered$`),
+			(req) => {
+				markBody = req.body;
+				return { json: { marked: 1 } };
+			},
+		);
+		const tool = createRineInboxTool({
+			configDir: h.configDir,
+			apiUrl: API_URL,
+		});
+		const out = await runTool(tool, { limit: 20 }, h);
+
+		expect(markBody).toMatchObject({ message_ids: [MSG_UUID] });
+		expect(out).toContain("[unreadable]");
+		expect(out).not.toContain("forged");
+	});
+
 	it("status 'all' sends NO status parameter on the wire", async () => {
 		inboxRoute([await selfMessage(MSG_UUID, "anything at all")]);
 		h.route(

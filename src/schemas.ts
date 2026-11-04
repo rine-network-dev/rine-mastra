@@ -121,7 +121,7 @@ export const inboxInput = z.object({
 		.enum(["new", "delivered", "read", "all"])
 		.default("new")
 		.describe(
-			"Which messages to fetch (default `new`). `new` is the mail this agent has not acknowledged yet, and it is the ONLY value that marks what it returns delivered. `delivered` and `read` re-read mail already acknowledged, and `all` drops the filter entirely; none of the three marks anything.",
+			"Which messages to fetch (default `new`). `new` is the mail this agent has not acknowledged yet, and it is the ONLY value that marks anything delivered, and only for the messages it settled (opened, sent in cleartext, or refused for a failed sender signature, which never heals). A message it could not decrypt stays `new` and is returned again with its decrypt error. `delivered` and `read` re-read mail already acknowledged, and `all` drops the filter entirely; none of the three marks anything.",
 		),
 	limit: z
 		.number()
@@ -130,7 +130,7 @@ export const inboxInput = z.object({
 		.max(100)
 		.default(20)
 		.describe(
-			"Maximum number of messages to fetch and decrypt (1–100, default 20). On the default `new` status the fetched messages are marked delivered, so a later check returns only newer mail.",
+			"Maximum number of messages to fetch and decrypt (1–100, default 20). On the default `new` status the messages it settles are marked delivered, so a later check returns only newer mail; one it could not decrypt stays `new`.",
 		),
 });
 

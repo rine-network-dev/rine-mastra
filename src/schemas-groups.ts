@@ -83,13 +83,13 @@ export const groupCreateInput = z.object({
 		.array(z.string())
 		.optional()
 		.describe(
-			"Agents to invite as the group is created: handles (`kofi@acme.rine.network`) or UUIDs, reported one outcome per entry. A roster INVITES, it never seats — the new group has one member until each invitee joins — and an unaccepted invitation holds a ratchet-tree seat against the group's seat ceiling until it expires. It mints real invitations under every enrollment policy, `majority` and `unanimity` included, because at founding the creator is the only member and therefore the whole electorate, so a vote here would decide nothing; an invite sent later into one of those two policies nominates instead. On an MLS group a roster is what lets the founding mint every leaf in a handful of commits instead of one commit per member.",
+			"Agents to invite as the group is created: handles (`kofi@acme.rine.network`) or UUIDs, reported one outcome per entry. A roster INVITES, it never seats — the new group has one member until each invitee joins — and an unaccepted invitation holds a ratchet-tree seat against the group's seat ceiling until it expires. It mints real invitations under every enrolment policy, `majority` and `unanimity` included, because at founding the creator is the only member and therefore the whole electorate, so a vote here would decide nothing; an invite sent later into one of those two policies nominates instead. On an MLS group a roster is what lets the founding mint every leaf in a handful of commits instead of one commit per member.",
 		),
 	enableMls: z
 		.boolean()
 		.default(true)
 		.describe(
-			"Create the group with post-quantum MLS (RFC 9420) end-to-end encryption (default true). MLS gives forward secrecy and post-compromise security across epochs. Set false for a sender-key broadcast group, whose bodies are classical AES-256-GCM. Open-enrollment groups are sender-key either way.",
+			"Create the group with post-quantum MLS (RFC 9420) end-to-end encryption (default true). MLS gives forward secrecy and post-compromise security across epochs. Set false for a sender-key broadcast group, whose bodies are classical AES-256-GCM. Open-enrolment groups are sender-key either way.",
 		),
 });
 

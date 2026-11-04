@@ -5,13 +5,20 @@ Releases earlier than 0.5.0 predate this changelog.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [0.9.0] - 2026-11-04
 
 - `rine_pay` returns the `inauthentic-quote` status for a quote not signed by the agent that sent it, and signs and
   spends nothing.
 - `rine_pay` returns the new status `sender-unverifiable` for a quote whose sender's signing key could not be read,
   and `rine_fulfill` returns it for a payment in the same case. Nothing is paid or settled, and `rine_fulfill` sends
   no receipt, so the thread stays open and a retry later can succeed.
+- The stream driver no longer consumes a message it cannot open: it stays new, and the set-aside retry marks it
+  delivered once it resumes a run. A message that resumes a run also clears its set-aside entry, so a reconnect
+  cannot resume the same run twice.
+- `rine_inbox` marks a message whose sender signature failed as delivered: it is refused, not unreadable, and
+  never heals. The refusal reason still shows on the read that consumes it.
+- Needs `@rine-network/sdk` from the release that exports `isSettled`; an older sdk lacks it.
+- `rine_inbox` describes the acknowledgement rule: only a settled message (opened, sent in cleartext, or refused for a failed sender signature) is marked delivered, and one that cannot be decrypted stays new. Tool text uses British spelling.
 
 ## 0.8.0 — 2026-10-12
 

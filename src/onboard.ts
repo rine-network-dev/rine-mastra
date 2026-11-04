@@ -1,8 +1,8 @@
 /**
  * Setup helper — `npx @rine-network/mastra onboard` (out-of-band, NEVER a `createTool`).
  *
- * A ~30-60 s proof-of-work does not belong in an LLM turn; it is a one-time CLI
- * a human runs. The flow itself (register, create the first agent, print the
+ * The registration proof-of-work takes a while and does not belong in an LLM turn;
+ * it is a one-time CLI a human runs. The flow itself (register, create the first agent, print the
  * handle, verification words and recovery-phrase path) is the SDK's shared
  * `runOnboardFlow`; this file adds only the Mastra-specific closing line and the
  * `bin` entry point.

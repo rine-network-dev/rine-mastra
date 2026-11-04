@@ -33,6 +33,7 @@ function rig(
 		sync?: (group: string) => Promise<unknown>;
 		resumed?: boolean;
 		store?: SetAsideStore;
+		markDelivered?: (ids: string[]) => Promise<unknown>;
 	} = {},
 ) {
 	// One log of every call, in order: this is the only way to assert that the
@@ -50,12 +51,19 @@ function rig(
 			calls.push(`read:${id}:peek=${o?.peek}`);
 			return opts.read ? opts.read(id, o) : makeInbound({ id });
 		},
+		markDelivered: async (ids: string[]) => {
+			calls.push(`ack:${ids.join(",")}`);
+			return opts.markDelivered ? opts.markDelivered(ids) : ids.length;
+		},
 	} as unknown as RetryClient;
 	const handleInbound = vi.fn(async (msg: { id: string }) => {
 		calls.push(`handle:${msg.id}`);
-		return opts.resumed === false
-			? ({ resumed: false, reason: "no-map" } as const)
-			: ({ resumed: true, runId: "run-x" } as const);
+		if (opts.resumed === false) {
+			return { resumed: false, reason: "no-map" } as const;
+		}
+		// The real resumer drops the record of a message it resumes.
+		await setAside.forget(msg.id);
+		return { resumed: true, runId: "run-x" } as const;
 	});
 	const resumer = { setAside, handleInbound } as unknown as RineThreadResumer;
 	const logger = { debug: vi.fn(), warn: vi.fn() };
@@ -79,6 +87,7 @@ describe("sweepSetAside — one pass over the parked messages", () => {
 			`sync:${GROUP}`,
 			`read:${MSG}:peek=true`,
 			`handle:${MSG}`,
+			`ack:${MSG}`,
 		]);
 	});
 
@@ -89,7 +98,11 @@ describe("sweepSetAside — one pass over the parked messages", () => {
 		const r = rig();
 		await r.setAside.record({ id: MSG, reason: "no-map", groupId: null });
 		await sweepSetAside(r.args);
-		expect(r.calls).toEqual([`read:${MSG}:peek=true`, `handle:${MSG}`]);
+		expect(r.calls).toEqual([
+			`read:${MSG}:peek=true`,
+			`handle:${MSG}`,
+			`ack:${MSG}`,
+		]);
 	});
 
 	it("forgets a message whose retry resumed a run", async () => {
@@ -97,6 +110,37 @@ describe("sweepSetAside — one pass over the parked messages", () => {
 		await r.setAside.record({ id: MSG, reason: "no-map", groupId: null });
 		await sweepSetAside(r.args);
 		expect(await r.setAside.due()).toEqual([]);
+	});
+
+	it("marks a resumed message delivered, after the resume and never before it", async () => {
+		// A message the stream could not open stayed `new`; nothing else would mark
+		// it once the sweep has resumed its run.
+		const r = rig();
+		await r.setAside.record({ id: MSG, reason: "decrypt-failed", groupId: null });
+		await sweepSetAside(r.args);
+		expect(r.calls.slice(-2)).toEqual([`handle:${MSG}`, `ack:${MSG}`]);
+	});
+
+	it("does not mark a message delivered when the retry could not resume", async () => {
+		const r = rig({ resumed: false });
+		await r.setAside.record({ id: MSG, reason: "no-map", groupId: null });
+		await sweepSetAside(r.args);
+		expect(r.calls.some((c) => c.startsWith("ack:"))).toBe(false);
+	});
+
+	it("warns, and still finishes the sweep, when the mark fails", async () => {
+		const r = rig({
+			markDelivered: async () => {
+				throw new Error("503");
+			},
+		});
+		await r.setAside.record({ id: MSG, reason: "no-map", groupId: null });
+		await r.setAside.record({ id: MSG_B, reason: "no-map", groupId: null });
+		await sweepSetAside(r.args);
+		expect(r.handleInbound).toHaveBeenCalledTimes(2);
+		expect(String(r.logger.warn.mock.calls[0]?.[0])).toContain(
+			"could not mark it delivered",
+		);
 	});
 
 	it("counts an attempt, and keeps the entry, when the retry still cannot resume", async () => {
@@ -120,7 +164,11 @@ describe("sweepSetAside — one pass over the parked messages", () => {
 		const r = rig();
 		await r.setAside.record({ id: MSG, reason: "decrypt-failed", groupId: null });
 		await sweepSetAside(r.args);
-		expect(r.calls).toEqual([`read:${MSG}:peek=true`, `handle:${MSG}`]);
+		expect(r.calls).toEqual([
+			`read:${MSG}:peek=true`,
+			`handle:${MSG}`,
+			`ack:${MSG}`,
+		]);
 	});
 
 	it("syncs once per group per sweep, however many of its messages are parked", async () => {
@@ -177,7 +225,11 @@ describe("sweepSetAside — one pass over the parked messages", () => {
 			groupId: "../agents/victim",
 		});
 		await sweepSetAside(r.args);
-		expect(r.calls).toEqual([`read:${MSG}:peek=true`, `handle:${MSG}`]);
+		expect(r.calls).toEqual([
+			`read:${MSG}:peek=true`,
+			`handle:${MSG}`,
+			`ack:${MSG}`,
+		]);
 		// Nothing was even ATTEMPTED. This is what distinguishes the local guard
 		// from leaning on the SDK brand's own TypeError: that throw lands in the
 		// sync's catch, which then WARNS about a group nobody should have asked

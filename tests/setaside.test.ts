@@ -1,10 +1,10 @@
 /**
  * The set-aside store and what the resumer records into it.
  *
- * What this exists to catch: the driver is an SSE loop, and the rine server
- * marks a streamed frame delivered as it yields it — so a message the resumer
- * skipped has already been consumed, and the recorded id is the only thing left
- * to retry it by. Before this store there was none, and the package documented
+ * What this exists to catch: the driver is an SSE loop, and the stream
+ * acknowledges every row it opens — so a message the resumer skipped after
+ * opening it has already been consumed, and the recorded id is the only thing
+ * left to retry it by. Before this store there was none, and the package documented
  * the opposite ("lossless — a later poll can retry"). Every assertion here is
  * about the id being written down, the bound that stops it being retried
  * forever, and the one class that must never be retried at all.
@@ -208,7 +208,7 @@ describe.each(stores)("%s — the store contract", (_name, open) => {
 describe("SqliteSetAside — the durable half", () => {
 	it("a parked message survives closing and re-opening the same file", async () => {
 		// The whole point of the durable store: the in-memory one forgets a parked
-		// message on restart, and the message it forgets was already consumed off
+		// message on restart, and the message it forgets was already acknowledged by
 		// the stream, so nothing else remembers it either.
 		const dir = mkdtempSync(join(tmpdir(), "rine-mastra-setaside-"));
 		const url = `file:${join(dir, "setaside.db")}`;
@@ -384,7 +384,7 @@ describe("RineThreadResumer — every skip records the message's id", () => {
 		const out = await resumer.handleInbound(makeInbound(over));
 		expect(out).toEqual({ resumed: false, reason });
 		// 🔴 The id, recorded — the only handle left on a message the stream has
-		// already marked delivered.
+		// already acknowledged.
 		expect(recorded).toEqual([{ id: "m1", reason, groupId: null }]);
 		// Whether it is ever offered to the retry follows the reason: a message with
 		// no conversation cannot acquire one by being re-read.
@@ -411,6 +411,15 @@ describe("RineThreadResumer — every skip records the message's id", () => {
 		const out = await resumer.handleInbound(makeInbound());
 		expect(out).toEqual({ resumed: false, reason: "failed" });
 		expect(recorded).toEqual([{ id: "m1", reason: "failed", groupId: null }]);
+	});
+
+	it("forgets a parked entry for a message that resumes a run, so the sweep does not resume it again", async () => {
+		// The message was parked, then came back on a cold reconnect and opened.
+		const { resumer, inner } = await resumerFor("suspended", true);
+		await inner.record({ id: "m1", reason: "decrypt-failed", groupId: null });
+		const out = await resumer.handleInbound(makeInbound());
+		expect(out).toEqual({ resumed: true, runId: "run-x" });
+		expect(await inner.due()).toEqual([]);
 	});
 
 	it("records nothing when the run actually resumed", async () => {
@@ -464,7 +473,7 @@ describe("RineThreadResumer — every skip records the message's id", () => {
 			reason: "no-map",
 		});
 		// And it says so: this is the one failure on the path that really does lose
-		// a message, because the stream already consumed it.
+		// a message, because the stream already acknowledged it.
 		expect(warn).toHaveBeenCalled();
 		expect(String(warn.mock.calls[0]?.[0])).toContain("will not be retried");
 	});

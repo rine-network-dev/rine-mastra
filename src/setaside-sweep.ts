@@ -3,11 +3,13 @@
  * `setaside.ts`; WHEN it runs is `setaside-schedule.ts`.
  *
  * 🔴 **The re-read by id is the whole fix.** The default driver is an SSE loop
- * and the server marks a streamed frame delivered as it yields it, so a message
- * the resumer skipped has already left `status=new`, `poll()` and the SSE
- * catch-up. It is not coming back on its own, and no read option changes that
- * after the fact — a `GET` for its id is the only way to see those bytes again,
- * and the recorded id is the only reason this package still knows to ask.
+ * that acknowledges a message once it has opened it, so a message the resumer
+ * then skipped has already left `status=new`, `poll()` and the SSE catch-up. It
+ * is not coming back on its own, and no read option changes that after the
+ * fact — a `GET` for its id is the only way to see those bytes again, and the
+ * recorded id is the only reason this package still knows to ask. A message the
+ * stream could not open is still `new`; the sweep marks it delivered once it
+ * resumes a run, because nothing else would.
  *
  * 🔴 The re-read nonetheless PEEKS. The webhook driver is the case it is for:
  * there the row may well still be `new`, and a retry that consumed it would
@@ -36,7 +38,7 @@ import type {
 import type { DecryptedMessage } from "./types.js";
 
 /**
- * The two SDK calls one retry spends.
+ * The SDK calls one retry spends.
  *
  * Narrowed to them, and extending the sync's client rather than restating it, so
  * a test can stand one up without an `AsyncRineClient` — and so this module
@@ -46,6 +48,8 @@ import type { DecryptedMessage } from "./types.js";
 export interface RetryClient extends GroupSyncClient {
 	/** `GET /messages/{id}`, decrypting with this host's keys. */
 	read(id: MessageUuid, opts?: { peek?: boolean }): Promise<DecryptedMessage>;
+	/** `POST /agents/{id}/messages/mark-delivered`. */
+	markDelivered(ids: string[]): Promise<number>;
 }
 
 /**
@@ -129,18 +133,31 @@ async function retryOne(
 		await countAttempt(a, entry);
 		return;
 	}
-	// 🔴 Forgotten AFTER the resume, not before it. The other order — openclaw's,
-	// where a crash between the two would re-run an agent turn — is the right one
-	// for a harness that cannot un-say a reply. Here the thing being re-run is a
-	// workflow resume keyed on a `runId` that is no longer suspended, which the
-	// `not-suspended` arm skips, and the package's own contract already tells a
-	// workflow to key its idempotency on `messageId`. So the cheaper failure is
-	// the duplicate attempt, and what this order buys is that a crash cannot
-	// silently drop the record of a message that never actually resumed.
-	await a.resumer.setAside.forget(entry.id);
+	// The resumer has already dropped the record (`handleInbound`). What is left
+	// is the row itself: a message the stream could not open is still `new`, and
+	// nothing else will mark it. On the webhook driver the delivery worker has
+	// already set `delivered_at`, so the mark finds nothing to do.
+	await ackResumed(a, entry.id);
 	a.logger.debug?.(
 		`[rine] set-aside message ${entry.id} resumed run ${outcome.runId} on retry ${entry.attempts + 1} (was ${entry.reason})`,
 	);
+}
+
+/**
+ * Mark a message the sweep has resumed a run for as delivered.
+ *
+ * Best-effort: the run has resumed, and a failed mark only leaves the row `new`
+ * to be offered again, where the resumer finds no suspended run and skips it.
+ */
+async function ackResumed(a: SweepArgs, id: string): Promise<void> {
+	try {
+		await a.client.markDelivered([id]);
+	} catch (err) {
+		a.logger.warn?.(
+			`[rine] resumed message ${id} but could not mark it delivered; it may be shown again:`,
+			err,
+		);
+	}
 }
 
 /**
@@ -148,9 +165,10 @@ async function retryOne(
  *
  * 🔴 The sentence names what is still true: nothing on this path acknowledged
  * the message, and the recorded id is what is left of it. It deliberately does
- * NOT promise the message is still in the inbox listing — on the SSE driver it
- * is not, because the server marked it delivered as it yielded the frame, and
- * that is exactly the false claim this whole store was built to stop repeating.
+ * NOT promise the message is still in the inbox listing — on the SSE driver a
+ * message the stream opened is not, because the stream acknowledged it before
+ * the resumer saw it, and that is exactly the false claim this whole store was
+ * built to stop repeating.
  */
 async function countAttempt(a: SweepArgs, entry: SetAsideEntry): Promise<void> {
 	const next = await a.resumer.setAside.countAttempt(entry);

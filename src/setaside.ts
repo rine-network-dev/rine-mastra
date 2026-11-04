@@ -3,13 +3,14 @@
  * the in-process implementation of it. The durable one is `setaside-sqlite.ts`;
  * the bounded retry that later resumes them is `setaside-sweep.ts`.
  *
- * The gap this closes: the default driver is a long-lived SSE loop, and the rine
- * server marks a streamed frame delivered as it yields it — before any line of
- * this package runs. So a message the resumer skipped was already consumed: it
- * had left `status=new`, left `poll()` and left the SSE catch-up, and nothing
- * recorded its id. A group post that arrived before its sender key, or one whose
- * run had not been mapped yet, was gone. This is the record that makes such a
- * message answerable, and {@link SetAsideStore.due} is what answers it.
+ * The gap this closes: the default driver is a long-lived SSE loop that
+ * acknowledges a message once it has opened it, before any line of this package
+ * runs. So a message the resumer then skipped (its run had not been mapped yet,
+ * say) had left `status=new`, left `poll()` and left the SSE catch-up, and
+ * nothing recorded its id. This is the record that makes such a message
+ * answerable, and {@link SetAsideStore.due} is what answers it. A message the
+ * stream could not open stays `new`; the sweep marks it delivered once it
+ * resumes a run.
  *
  * 🔴 **Nothing in this module acknowledges a message.** Not a record, not the
  * attempt bound, not an overflow drop. Whatever the server did with the row on
