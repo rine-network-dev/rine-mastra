@@ -5,8 +5,14 @@ Releases earlier than 0.5.0 predate this changelog.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] - 2026-11-13
+
+- Republished with no change to the tools. It now depends on `@rine-network/core` 0.19.0 and `@rine-network/sdk` 0.16.0, which carry the owner-folder fix (a runtime dir for one org no longer signs as another org's owner) and the stream reconnect.
+
 ## [0.9.0] - 2026-11-04
 
+- A key-material frame or a group invite on a conversation with a suspended run no longer resumes it. The resumer
+  reports `{ resumed: false, reason: "control-frame" }` and does not park the message for retry.
 - `rine_pay` returns the `inauthentic-quote` status for a quote not signed by the agent that sent it, and signs and
   spends nothing.
 - `rine_pay` returns the new status `sender-unverifiable` for a quote whose sender's signing key could not be read,

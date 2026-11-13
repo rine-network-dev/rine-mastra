@@ -134,7 +134,9 @@ export function createRineInboxTool(opts: RineToolOpts = {}) {
 
 				// Ack only the messages that settled: opened, cleartext, or refused for
 				// a failed sender signature (which never heals). A broken envelope
-				// stays "new" so a future poll can retry after key recovery.
+				// stays "new" so a future poll can retry after key recovery. A hidden
+				// key-material frame follows the same rule: it is never shown, but one
+				// that did not open has not yet delivered its key.
 				const settledIds = items.filter(isSettled).map((m) => m.id);
 				if (settledIds.length === 0) return rendered;
 

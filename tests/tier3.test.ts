@@ -20,6 +20,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RineThreadResumer } from "../src/inbound.js";
+import { InMemorySetAside } from "../src/setaside.js";
 import { InMemoryThreadMap, SqliteThreadMap } from "../src/threadmap.js";
 import { SENTINEL_CIPHERTEXT as SENTINEL, makeInbound } from "./harness.js";
 
@@ -259,6 +260,26 @@ describe("RineThreadResumer.handleInbound — skip paths never resume, never ack
 		expect(f.workflow.getWorkflowRunById).not.toHaveBeenCalled();
 		expect(f.resume).not.toHaveBeenCalled();
 	});
+
+	it.each(["rine.v1.sender_key_distribution", "rine.v1.group_invite"])(
+		"a %s frame on a suspended run → never resumes, never parked",
+		async (type) => {
+			const f = fakeWorkflow("suspended");
+			const map = new InMemoryThreadMap();
+			await map.set("bob@acme", "c1", "run-x");
+			const setAside = new InMemorySetAside();
+			const resumer = new RineThreadResumer({
+				workflow: f.workflow,
+				threadMap: map,
+				setAside,
+				logger: quietLogger,
+			});
+			const out = await resumer.handleInbound(inbound({ type }));
+			expect(out).toEqual({ resumed: false, reason: "control-frame" });
+			expect(f.resume).not.toHaveBeenCalled();
+			expect(await setAside.due()).toEqual([]);
+		},
+	);
 
 	it("from_agent_id keys the thread map when sender_handle is null", async () => {
 		const f = fakeWorkflow("suspended");

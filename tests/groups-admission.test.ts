@@ -46,6 +46,31 @@ describe("renderAdmission — the invitation, per agent", () => {
 		expect(out).not.toContain("(not_applicable)");
 	});
 
+	// A group rule is not one of the old reasons, and a reason a newer server
+	// adds must not take the report down with it.
+	it("says the group-rule clause for org_rule, never the token", () => {
+		const out = renderAdmission({
+			invited: 0,
+			skipped: 1,
+			entries: [{ agent_id: ANA, status: "skipped", reason: "org_rule" }],
+		});
+
+		expect(out).toContain("refused by an organisation's group rule");
+		expect(out).not.toContain("org_rule");
+	});
+
+	it("quotes an unknown reason back rather than throwing", () => {
+		const out = renderAdmission({
+			invited: 0,
+			skipped: 1,
+			entries: [{ agent_id: ANA, status: "skipped", reason: "some_future_reason" }],
+		});
+
+		expect(out).toContain(
+			"reason not recognised by this client: some_future_reason",
+		);
+	});
+
 	// The sharpest thing this surface can get wrong about a nomination
 	// is to call it an invitation: an invitation is accepted, a nomination waits
 	// on a vote that may refuse it, and a model told the first will report an

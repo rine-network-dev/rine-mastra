@@ -33,51 +33,28 @@
  * once keys its own idempotency on `messageId`.
  */
 
-import { withA2aCleartextNotice } from "@rine-network/core";
-import { unwrapText } from "./format.js";
+import { isGroupInvite, isHiddenFromModel } from "@rine-network/core";
+import type {
+	ResumeOutcome,
+	RineThreadResumerOptions,
+} from "./inbound-types.js";
+import { resumeDataFor, senderHandle } from "./resume-data.js";
 import { InMemorySetAside, sightingOf } from "./setaside.js";
 import type { ResumeSkipReason, SetAsideStore } from "./setaside.js";
 import type { ThreadMapStore } from "./threadmap.js";
 import type { DecryptedMessage } from "./types.js";
-import type { ResumableWorkflow, ResumeData } from "./workflow.js";
+import type { ResumableWorkflow } from "./workflow.js";
 
+export type {
+	ResumeOutcome,
+	RineThreadResumerOptions,
+} from "./inbound-types.js";
 export type {
 	ResumableRun,
 	ResumableWorkflow,
 	ResumeData,
 	WorkflowSnapshot,
 } from "./workflow.js";
-
-/** Options for {@link RineThreadResumer}. */
-export interface RineThreadResumerOptions {
-	/** A pre-built workflow with snapshot storage already bound. */
-	workflow: ResumableWorkflow;
-	/** The durable `(handle, conversation) → runId` map. */
-	threadMap: ThreadMapStore;
-	/** The suspended step to resume; omit when exactly one step is suspended. */
-	step?: unknown;
-	/**
-	 * Where a skipped message's id is recorded for the bounded retry. Defaults
-	 * to an {@link InMemorySetAside}, which forgets everything on restart; pass a
-	 * `SqliteSetAside` for a host whose parked messages must outlive it.
-	 */
-	setAside?: SetAsideStore;
-	/** Optional logger; defaults to `console`. Used for skip-path diagnostics. */
-	logger?: Pick<Console, "debug" | "warn">;
-}
-
-/** Outcome of {@link RineThreadResumer.handleInbound} — observable for drivers/tests. */
-export type ResumeOutcome =
-	| { resumed: true; runId: string }
-	| { resumed: false; reason: ResumeSkipReason };
-
-/**
- * The sender label used as the thread `handle` key and as `resumeData.from`.
- * Prefers the human handle, falls back to the agent UUID (matches `format.ts`).
- */
-function senderHandle(msg: DecryptedMessage): string | undefined {
-	return msg.sender_handle ?? msg.from_agent_id ?? undefined;
-}
 
 /**
  * Wakes suspended Mastra workflow runs from inbound rine messages. Build ONE per
@@ -112,6 +89,15 @@ export class RineThreadResumer {
 	 * bounded retry, and acknowledges nothing.
 	 */
 	async handleInbound(msg: DecryptedMessage): Promise<ResumeOutcome> {
+		// Key material and a group invite are not conversation: a parked run is never
+		// resumed with them, and they are not parked either, because no retry could
+		// turn them into something a workflow should read.
+		if (isHiddenFromModel(msg.type) || isGroupInvite(msg.type)) {
+			this.log.debug?.(
+				`[rine] inbound ${msg.id} is a control frame; not resuming`,
+			);
+			return { resumed: false, reason: "control-frame" };
+		}
 		const handle = senderHandle(msg);
 		const conversation = msg.conversation_id;
 		if (!handle || !conversation) {
@@ -150,14 +136,7 @@ export class RineThreadResumer {
 			return this.setAsideSkip(msg, "not-suspended");
 		}
 
-		// resumeData is plaintext + signature facts ONLY — JSON-serializable,
-		// never the ciphertext envelope or an SDK client.
-		const resumeData: ResumeData = {
-			plaintext: withA2aCleartextNotice(msg, unwrapText(msg.plaintext)),
-			verified: msg.verified,
-			from: handle,
-			messageId: msg.id,
-		};
+		const resumeData = resumeDataFor(msg, handle);
 
 		// Isolate a throwing resumed step / transient storage error, the way the
 		// langchain adapter does: a raise here must NOT propagate — it would crash

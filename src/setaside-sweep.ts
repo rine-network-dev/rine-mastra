@@ -129,6 +129,12 @@ async function retryOne(
 	// first-sight one gets — and so a still-unresumable one is re-parked by the
 	// resumer itself rather than by a second copy of that decision here.
 	const outcome = await a.resumer.handleInbound(msg);
+	// Key material and an invite never become a resume, however often they are read,
+	// so a row parked before those were refused outright is dropped, not retried to exhaustion.
+	if (!outcome.resumed && outcome.reason === "control-frame") {
+		await a.resumer.setAside.forget(entry.id);
+		return;
+	}
 	if (!outcome.resumed) {
 		await countAttempt(a, entry);
 		return;

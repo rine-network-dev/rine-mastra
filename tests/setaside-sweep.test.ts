@@ -14,12 +14,14 @@ import {
 	SETASIDE_SWEEP_BATCH,
 	SETASIDE_SWEEP_INTERVAL_MS,
 } from "../src/constants.js";
-import type { RineThreadResumer } from "../src/inbound.js";
+import { RineThreadResumer } from "../src/inbound.js";
+import type { ResumableWorkflow } from "../src/inbound.js";
 import { startSweepSchedule } from "../src/setaside-schedule.js";
 import { sweepSetAside } from "../src/setaside-sweep.js";
 import type { RetryClient, SweepArgs } from "../src/setaside-sweep.js";
 import { InMemorySetAside } from "../src/setaside.js";
 import type { SetAsideStore } from "../src/setaside.js";
+import { InMemoryThreadMap } from "../src/threadmap.js";
 import { makeInbound } from "./harness.js";
 
 const MSG = "11111111-1111-4111-8111-111111111111";
@@ -32,6 +34,7 @@ function rig(
 		read?: (id: string, o?: { peek?: boolean }) => Promise<unknown>;
 		sync?: (group: string) => Promise<unknown>;
 		resumed?: boolean;
+		resumer?: RineThreadResumer;
 		store?: SetAsideStore;
 		markDelivered?: (ids: string[]) => Promise<unknown>;
 	} = {},
@@ -39,7 +42,8 @@ function rig(
 	// One log of every call, in order: this is the only way to assert that the
 	// sync happened BEFORE the read rather than merely also happening.
 	const calls: string[] = [];
-	const setAside = opts.store ?? new InMemorySetAside();
+	const setAside =
+		opts.store ?? opts.resumer?.setAside ?? new InMemorySetAside();
 	const client = {
 		groups: {
 			sync: async (group: string) => {
@@ -65,7 +69,9 @@ function rig(
 		await setAside.forget(msg.id);
 		return { resumed: true, runId: "run-x" } as const;
 	});
-	const resumer = { setAside, handleInbound } as unknown as RineThreadResumer;
+	const resumer =
+		opts.resumer ??
+		({ setAside, handleInbound } as unknown as RineThreadResumer);
 	const logger = { debug: vi.fn(), warn: vi.fn() };
 	const args: SweepArgs = { client, resumer, logger };
 	return { args, calls, setAside, handleInbound, logger };
@@ -149,6 +155,27 @@ describe("sweepSetAside — one pass over the parked messages", () => {
 		await sweepSetAside(r.args);
 		expect(await r.setAside.due()).toMatchObject([{ id: MSG, attempts: 1 }]);
 	});
+
+	it.each(["rine.v1.group_invite", "rine.v1.sender_key_distribution"])(
+		"drops a parked %s row through a real resumer, instead of retrying it to exhaustion",
+		async (type) => {
+			const workflow = { getWorkflowRunById: vi.fn() };
+			const resumer = new RineThreadResumer({
+				workflow: workflow as unknown as ResumableWorkflow,
+				threadMap: new InMemoryThreadMap(),
+				logger: { debug: vi.fn(), warn: vi.fn() },
+			});
+			const r = rig({
+				resumer,
+				read: async (id) => makeInbound({ id, type }),
+			});
+			await r.setAside.record({ id: MSG, reason: "no-map", groupId: null });
+			await sweepSetAside(r.args);
+			expect(await r.setAside.due()).toEqual([]);
+			expect(workflow.getWorkflowRunById).not.toHaveBeenCalled();
+			expect(r.logger.warn).not.toHaveBeenCalled();
+		},
+	);
 
 	it("does not sync for a reason a sync cannot heal", async () => {
 		// A message that never reached the ciphertext has nothing about its group to
