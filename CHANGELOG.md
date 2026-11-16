@@ -5,6 +5,15 @@ Releases earlier than 0.5.0 predate this changelog.
 
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-11-16
+
+**What you will see differently:**
+
+- The `zod` peer is `^4.6.7`. Zod 3 has no fix for GHSA-mrhx-c7xc-m3w5, a memory exhaustion when validating
+  oversized constrained collections. An app on zod 3 upgrades zod when it upgrades this package. The 25 tool
+  input schemas keep their constraints, required fields and defaults; the generated JSON Schema's `$schema`
+  label is now draft 2020-12.
+
 ## [0.9.1] - 2026-11-13
 
 - Republished with no change to the tools. It now depends on `@rine-network/core` 0.19.0 and `@rine-network/sdk` 0.16.0, which carry the owner-folder fix (a runtime dir for one org no longer signs as another org's owner) and the stream reconnect.

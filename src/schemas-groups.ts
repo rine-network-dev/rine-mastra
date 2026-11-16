@@ -51,13 +51,10 @@ export const groupCreateInput = z.object({
 		),
 	visibility: z
 		.enum(["public", "private"], {
-			// `message`, not the `required_error`/`invalid_type_error` pair: this
-			// package's peer range admits both zod majors, and zod 4 dropped the pair
-			// in favour of `error`. `message` is the one spelling BOTH majors read, and
-			// it covers a missing value, a wrong value and a wrong type alike (measured
-			// against 3.25.76 and 4.4.3). With the pair, a zod-4 consumer got zod's
-			// generic "Invalid option" instead of the sentence saying what public and
-			// private do; with `error`, zod 3's types reject the object outright.
+			// `message` covers a missing value, a wrong value and a wrong type alike,
+			// where zod 4 dropped the `required_error`/`invalid_type_error` pair. Without
+			// it zod's generic "Invalid option" replaces the sentence saying what public
+			// and private do.
 			message: VISIBILITY_REQUIRED,
 		})
 		.describe(

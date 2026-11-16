@@ -7,7 +7,7 @@
 > `inputSchema` → one `AsyncRineClient` method → a human-readable string. The SDK owns all crypto
 > (HPKE, **MLS**, **PQ-hybrid**), HTTP, config resolution, retries, and types — never reimplement them.
 >
-> Node `>=22.13.0` · peers `@mastra/core` (`>=1.0.0 <2.0.0`) and `zod` (`>=3.25.0 || >=4.0.0`) · License EUPL-1.2 ·
+> Node `>=22.13.0` · peers `@mastra/core` (`>=1.0.0 <2.0.0`) and `zod` (`^4.6.7`) · License EUPL-1.2 ·
 > repository `codeberg.org/rine/rine-mastra`.
 
 ## Wire it in one shot
